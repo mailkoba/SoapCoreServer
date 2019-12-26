@@ -29,11 +29,6 @@ public interface ISoapService
         Action = "http://soapcoreserver/SendRequest",
         ReplyAction = "http://soapcoreserver/SendRequestResponse")]
     Task<SendRequestResponse> SendRequest(SendRequest sendRequest);
-
-    [OperationContract(
-        Action = "http://soapcoreserver/GetResponse",
-        ReplyAction = "http://soapcoreserver/GetResponseResponse")]
-    Task<GetResponseResponse> GetResponse(GetResponse getResponse);
 }
 ```
 
