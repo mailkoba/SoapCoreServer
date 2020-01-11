@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     public class Endpoint
     {

@@ -3,7 +3,7 @@ using System.IO;
 using System.ServiceModel.Channels;
 using System.Xml;
 
-namespace IsGa.Soap.Encoders
+namespace SoapCoreServer.Encoders
 {
     internal class BinaryMessageEncoder : MessageEncoder
     {

@@ -3,7 +3,7 @@ using System.IO;
 using System.ServiceModel.Channels;
 using System.Xml;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     internal class MessageBodyStream : Stream
     {

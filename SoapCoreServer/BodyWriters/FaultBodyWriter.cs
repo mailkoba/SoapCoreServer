@@ -2,7 +2,7 @@
 using System.ServiceModel.Channels;
 using System.Xml;
 
-namespace IsGa.Soap.BodyWriters
+namespace SoapCoreServer.BodyWriters
 {
     public class FaultBodyWriter : BodyWriter
     {

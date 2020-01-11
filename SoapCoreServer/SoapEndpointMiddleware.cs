@@ -3,17 +3,16 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.ServiceModel;
-using System.Threading.Tasks;
 using System.ServiceModel.Channels;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SoapCoreServer.BodyWriters;
+using SoapCoreServer.Descriptions;
+using SoapCoreServer.Encoders;
 
-using IsGa.Soap.BodyWriters;
-using IsGa.Soap.Descriptions;
-using IsGa.Soap.Encoders;
-
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     public class SoapEndpointMiddleware
     {

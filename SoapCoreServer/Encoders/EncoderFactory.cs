@@ -2,7 +2,7 @@
 using System.ServiceModel;
 using System.ServiceModel.Channels;
 
-namespace IsGa.Soap.Encoders
+namespace SoapCoreServer.Encoders
 {
     internal class EncoderFactory
     {

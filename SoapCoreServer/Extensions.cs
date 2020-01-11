@@ -4,7 +4,7 @@ using System.Reflection;
 using System.ServiceModel;
 using System.Threading.Tasks;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     internal static class Extensions
     {

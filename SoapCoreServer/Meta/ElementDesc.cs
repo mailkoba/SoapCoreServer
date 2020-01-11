@@ -1,9 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using IsGa.Soap.Descriptions;
+using SoapCoreServer.Descriptions;
 
-namespace IsGa.Soap.Meta
+namespace SoapCoreServer.Meta
 {
     internal class ElementDesc
     {

@@ -3,6 +3,8 @@
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
         <Product>SoapCoreServer</Product>
+        <Authors>mailkoba</Authors>
+        <Description>ASP .Net Core implementation of Soap Server. Supports part of features of WCF (Windows Communication Foundation) in .Net Framework 4.x.</Description>
     </PropertyGroup>
 
     <ItemGroup>

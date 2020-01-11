@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using IsGa.Soap.Descriptions;
+using SoapCoreServer.Descriptions;
 
-namespace IsGa.Soap.Meta
+namespace SoapCoreServer.Meta
 {
     internal class SchemaDesc
     {

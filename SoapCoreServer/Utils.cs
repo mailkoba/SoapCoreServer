@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Xml;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     internal static class Utils
     {

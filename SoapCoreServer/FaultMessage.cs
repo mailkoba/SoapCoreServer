@@ -5,7 +5,7 @@ using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.Xml;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     public class FaultMessage : MessageFault
     {

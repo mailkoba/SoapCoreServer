@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace IsGa.Soap.Descriptions
+namespace SoapCoreServer.Descriptions
 {
     public class OperationMemberDescription
     {

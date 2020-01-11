@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.ServiceModel;
 
-namespace IsGa.Soap.Descriptions
+namespace SoapCoreServer.Descriptions
 {
     internal class ServiceDescription
     {

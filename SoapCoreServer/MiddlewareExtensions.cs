@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     public static class SoapEndpointExtensions
     {

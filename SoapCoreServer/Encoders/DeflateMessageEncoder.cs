@@ -3,7 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.ServiceModel.Channels;
 
-namespace IsGa.Soap.Encoders
+namespace SoapCoreServer.Encoders
 {
     internal class DeflateMessageEncoder : MessageEncoder
     {

@@ -6,10 +6,10 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.ServiceModel.Channels;
 using System.Xml;
-using IsGa.Soap.Descriptions;
-using IsGa.Soap.Meta;
+using SoapCoreServer.Descriptions;
+using SoapCoreServer.Meta;
 
-namespace IsGa.Soap.BodyWriters
+namespace SoapCoreServer.BodyWriters
 {
     internal class MetaBodyWriter : BodyWriter
     {

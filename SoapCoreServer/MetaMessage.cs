@@ -1,9 +1,9 @@
 ﻿using System.Linq;
 using System.ServiceModel.Channels;
 using System.Xml;
-using IsGa.Soap.Descriptions;
+using SoapCoreServer.Descriptions;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     internal class MetaMessage : Message
     {

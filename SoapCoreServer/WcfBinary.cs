@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Xml;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     internal class WcfBinary
     {

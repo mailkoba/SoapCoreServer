@@ -3,7 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.ServiceModel;
 
-namespace IsGa.Soap.Descriptions
+namespace SoapCoreServer.Descriptions
 {
     internal class OperationDescription
     {

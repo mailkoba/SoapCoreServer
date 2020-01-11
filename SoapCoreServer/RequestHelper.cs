@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.ServiceModel.Channels;
-using IsGa.Soap.Descriptions;
+using SoapCoreServer.Descriptions;
 
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     internal class RequestHelper
     {

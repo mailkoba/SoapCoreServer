@@ -1,5 +1,5 @@
 ﻿
-namespace IsGa.Soap
+namespace SoapCoreServer
 {
     public enum MessageType
     {
