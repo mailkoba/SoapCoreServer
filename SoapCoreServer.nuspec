@@ -3,8 +3,8 @@
   <metadata>
     <id>SoapCoreServer</id>
     <version>1.0.0</version>
-    <authors>Vadim Paramoshkin</authors>
-    <owners>Vadim Paramoshkin</owners>
+    <authors>mailkoba</authors>
+    <owners>mailkoba</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>ASP .Net Core implementation of Soap Server. Supports part of features of WCF (Windows Communication Foundation) in .Net Framework 4.x.</description>
     <dependencies>
