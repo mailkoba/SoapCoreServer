@@ -1,1 +1,1 @@
-dotnet pack --configuration Release SoapCoreServer.csproj -p:NuspecFile=SoapCoreServer.nuspec
+dotnet pack --configuration Release .\SoapCoreServer.csproj -p:NuspecFile=.\SoapCoreServer.nuspec
