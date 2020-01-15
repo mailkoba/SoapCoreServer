@@ -5,6 +5,7 @@
         <Product>SoapCoreServer</Product>
         <Authors>mailkoba</Authors>
         <Description>ASP .Net Core implementation of Soap Server. Supports part of features of WCF (Windows Communication Foundation) in .Net Framework 4.x.</Description>
+        <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     </PropertyGroup>
 
     <ItemGroup>
@@ -14,6 +15,10 @@
       <EmbeddedResource Remove="Wrappers\**" />
       <None Remove="Streamed\**" />
       <None Remove="Wrappers\**" />
+      <None Include="..\LICENSE.txt">
+        <Pack>True</Pack>
+        <PackagePath></PackagePath>
+      </None>
     </ItemGroup>
 
     <ItemGroup>
