@@ -1,6 +1,10 @@
 # SoapCoreServer
 ASP .Net Core implementation of Soap Server. Supports part of features of WCF (Windows Communication Foundation) in .Net Framework 4.x.
 
+Published on NuGet.org - [https://www.nuget.org/packages/SoapCoreServer/](https://www.nuget.org/packages/SoapCoreServer/) and MyGet.org - [https://www.myget.org/feed/mailkoba/package/nuget/SoapCoreServer](https://www.myget.org/feed/mailkoba/package/nuget/SoapCoreServer).
+
+[![MyGet Build Status](https://www.myget.org/BuildSource/Badge/mailkoba?identifier=04051ba8-d3da-4f33-aa70-fb71fa22ec47)](https://www.myget.org/)
+
 #### Features
 
 * Supports transfer modes: text, binary, stream+text, stream+binary
