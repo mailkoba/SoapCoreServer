@@ -1,1 +1,1 @@
-dotnet pack ./SoapCoreServer.csproj --configuration Release
+dotnet pack ./SoapCoreServer/SoapCoreServer.csproj --configuration Release
