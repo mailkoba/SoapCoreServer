@@ -1,0 +1,1 @@
+dotnet pack ./SoapCoreServer.csproj --configuration Release
