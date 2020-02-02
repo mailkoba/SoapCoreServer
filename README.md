@@ -1,9 +1,7 @@
 # SoapCoreServer
 ASP .Net Core implementation of Soap Server. Supports part of features of WCF (Windows Communication Foundation) in .Net Framework 4.x.
 
-Published on NuGet.org - [https://www.nuget.org/packages/SoapCoreServer/](https://www.nuget.org/packages/SoapCoreServer/) and MyGet.org - [https://www.myget.org/feed/mailkoba/package/nuget/SoapCoreServer](https://www.myget.org/feed/mailkoba/package/nuget/SoapCoreServer).
-
-[![MyGet Build Status](https://www.myget.org/BuildSource/Badge/mailkoba?identifier=04051ba8-d3da-4f33-aa70-fb71fa22ec47)](https://www.myget.org/)
+Published on NuGet.org - [https://www.nuget.org/packages/SoapCoreServer/](https://www.nuget.org/packages/SoapCoreServer/).
 
 #### Features
 
@@ -94,6 +92,30 @@ public class Startup
         app.UseSoapEndpoint<SoapService>("/SoapService",
                                          new Endpoint("/text", MessageType.Text),
                                          new Endpoint("/gzip", MessageType.StreamBinaryGZip));
+        ...
+    }
+}
+```
+
+#### Note!
+If using .Net Core 3.x required enable AllowSynchronousIO parameter.
+```csharp
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        ...
+        // If using Kestrel:
+        services.Configure<KestrelServerOptions>(options =>
+        {
+            options.AllowSynchronousIO = true;
+        });
+
+        // If using IIS:
+        services.Configure<IISServerOptions>(options =>
+        {
+            options.AllowSynchronousIO = true;
+        });
         ...
     }
 }
