@@ -12,6 +12,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SolutionItems", "SolutionIt
 		README.md = README.md
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoapCoreServerWebDemo", "SoapCoreServerWebDemo\SoapCoreServerWebDemo.csproj", "{725DE99B-EF16-48EB-8C41-2105F55BAF84}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -22,6 +24,10 @@ Global
 		{6AA087F4-4E73-4A8C-A577-0CE7AF0E8EE8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6AA087F4-4E73-4A8C-A577-0CE7AF0E8EE8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6AA087F4-4E73-4A8C-A577-0CE7AF0E8EE8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{725DE99B-EF16-48EB-8C41-2105F55BAF84}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{725DE99B-EF16-48EB-8C41-2105F55BAF84}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{725DE99B-EF16-48EB-8C41-2105F55BAF84}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{725DE99B-EF16-48EB-8C41-2105F55BAF84}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

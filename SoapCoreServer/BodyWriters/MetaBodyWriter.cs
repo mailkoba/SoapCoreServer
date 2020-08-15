@@ -40,7 +40,6 @@ namespace SoapCoreServer.BodyWriters
 
         #region private
 
-        private const string XmlnsXs = "http://www.w3.org/2001/XMLSchema";
         private const string TransportSchema = "http://schemas.xmlsoap.org/soap/http";
 
         private readonly ServiceDescription _service;
@@ -91,7 +90,7 @@ namespace SoapCoreServer.BodyWriters
 
         private void WriteComplexType(XmlDictionaryWriter writer, ElementDesc elem)
         {
-            writer.WriteStartElement("xs:complexType");
+            writer.WriteStartElement("xs", "complexType", SoapNamespaces.Xsd);
             if (!elem.Root)
             {
                 writer.WriteAttributeString("name", elem.Name);
@@ -111,12 +110,12 @@ namespace SoapCoreServer.BodyWriters
                 {
                     var attr = elem.Type.GetCustomAttribute<DataContractAttribute>();
 
-                    writer.WriteStartElement("xs:annotation");
-                    writer.WriteStartElement("xs:appinfo");
+                    writer.WriteStartElement("xs", "annotation", SoapNamespaces.Xsd);
+                    writer.WriteStartElement("xs", "appinfo", SoapNamespaces.Xsd);
 
                     writer.WriteStartElement("GenericType");
                     writer.WriteAttributeString("xmlns", Utils.SerializationNs);
-                    writer.WriteAttributeString("Name", attr.Name ?? propType.type.Name);
+                    writer.WriteAttributeString("Name", attr?.Name ?? propType.type.Name);
                     writer.WriteAttributeString("Namespace", Utils.GetNsByType(propType.type));
                     writer.WriteEndElement(); // GenericType
 
@@ -136,9 +135,9 @@ namespace SoapCoreServer.BodyWriters
                 {
                     var baseTypeNs = Utils.GetNsByType(propType.type.BaseType);
 
-                    writer.WriteStartElement("xs:complexContent");
+                    writer.WriteStartElement("xs", "complexContent", SoapNamespaces.Xsd);
                     writer.WriteAttributeString("mixed", "false");
-                    writer.WriteStartElement("xs:extension");
+                    writer.WriteStartElement("xs", "extension", SoapNamespaces.Xsd);
 
                     var baseTypeName = Utils.GetTypeNameByContract(propType.type.BaseType);
                     string xsTypename;
@@ -156,7 +155,7 @@ namespace SoapCoreServer.BodyWriters
                 }
             }
 
-            writer.WriteStartElement("xs:sequence");
+            writer.WriteStartElement("xs", "sequence", SoapNamespaces.Xsd);
 
             foreach (var childElem in elem.Children
                                           .Where(x => !x.NotWriteInComplexType))
@@ -177,7 +176,7 @@ namespace SoapCoreServer.BodyWriters
 
         private void WriteElement(XmlDictionaryWriter writer, ElementDesc elem)
         {
-            writer.WriteStartElement("xs:element");
+            writer.WriteStartElement("xs", "element", SoapNamespaces.Xsd);
 
             if (elem.Root)
             {
@@ -303,8 +302,8 @@ namespace SoapCoreServer.BodyWriters
 
             if (!elem.EmitDefaultValue)
             {
-                writer.WriteStartElement("xs:annotation");
-                writer.WriteStartElement("xs:appinfo");
+                writer.WriteStartElement("xs", "annotation", SoapNamespaces.Xsd);
+                writer.WriteStartElement("xs", "appinfo", SoapNamespaces.Xsd);
 
                 writer.WriteStartElement("DefaultValue");
                 writer.WriteAttributeString("xmlns", Utils.SerializationNs);
@@ -336,7 +335,7 @@ namespace SoapCoreServer.BodyWriters
 
         private void WriteTypes(XmlDictionaryWriter writer)
         {
-            writer.WriteStartElement("wsdl:types");
+            writer.WriteStartElement("wsdl", "types", SoapNamespaces.Wsdl);
 
             var mainNs = _service.ContractDescriptions.First().Namespace;
 
@@ -350,12 +349,12 @@ namespace SoapCoreServer.BodyWriters
 
                 var schema = _wsdlDesc.GetSchema(ns);
 
-                writer.WriteStartElement("xs:schema");
-                writer.WriteAttributeString("xmlns:xs", XmlnsXs);
+                writer.WriteStartElement("xs", "schema", SoapNamespaces.Xsd);
+                writer.WriteXmlnsAttribute("xs", SoapNamespaces.Xsd);
 
                 if (schema.HasSerializationTypes)
                 {
-                    writer.WriteAttributeString("xmlns:ser", Utils.SerializationNs);
+                    writer.WriteXmlnsAttribute("ser", Utils.SerializationNs);
                 }
 
                 writer.WriteAttributeString("elementFormDefault", "qualified");
@@ -363,7 +362,7 @@ namespace SoapCoreServer.BodyWriters
 
                 if (ns != mainNs)
                 {
-                    writer.WriteAttributeString("xmlns:tns", ns);
+                    writer.WriteXmlnsAttribute("tns", ns);
                 }
 
                 var importNs = schema.ImportNs.ToList();
@@ -379,7 +378,7 @@ namespace SoapCoreServer.BodyWriters
 
                 foreach (var import in importNs)
                 {
-                    writer.WriteStartElement("xs:import");
+                    writer.WriteStartElement("xs", "import", SoapNamespaces.Xsd);
                     writer.WriteAttributeString("namespace", import);
                     writer.WriteEndElement();
                 }
@@ -410,21 +409,21 @@ namespace SoapCoreServer.BodyWriters
             {
                 var name = Utils.GetTypeNameByContract(toBuild);
 
-                writer.WriteStartElement("xs:simpleType");
+                writer.WriteStartElement("xs", "simpleType", SoapNamespaces.Xsd);
                 writer.WriteAttributeString("name", name);
-                writer.WriteStartElement("xs:restriction ");
+                writer.WriteStartElement("xs", "restriction", SoapNamespaces.Xsd);
                 writer.WriteAttributeString("base", "xs:string");
 
                 var iEnum = 0;
                 foreach (var value in Enum.GetValues(toBuild))
                 {
-                    writer.WriteStartElement("xs:enumeration ");
+                    writer.WriteStartElement("xs", "enumeration", SoapNamespaces.Xsd);
                     writer.WriteAttributeString("value", value.ToString());
 
                     if ((int) value != iEnum)
                     {
-                        writer.WriteStartElement("xs:annotation");
-                        writer.WriteStartElement("xs:appinfo");
+                        writer.WriteStartElement("xs", "annotation", SoapNamespaces.Xsd);
+                        writer.WriteStartElement("xs", "appinfo", SoapNamespaces.Xsd);
 
                         writer.WriteStartElement("EnumerationValue");
                         writer.WriteAttributeString("xmlns", Utils.SerializationNs);
@@ -449,18 +448,18 @@ namespace SoapCoreServer.BodyWriters
             var added = new HashSet<string>();
             foreach (var operation in _service.OperationDescriptions)
             {
-                // Input.
+                // Input
                 var requestMessageName = operation.IsStreamRequest
                                              ? $"{operation.ContractDescription.Name}_{operation.Name}_InputMessage"
                                              : operation.Request.MessageName;
                 if (!added.Contains(requestMessageName))
                 {
-                    writer.WriteStartElement("wsdl:message");
+                    writer.WriteStartElement("wsdl", "message", SoapNamespaces.Wsdl);
                     writer.WriteAttributeString("name", requestMessageName);
 
                     if (!operation.IsEmptyRequest)
                     {
-                        writer.WriteStartElement("wsdl:part");
+                        writer.WriteStartElement("wsdl", "part", SoapNamespaces.Wsdl);
                         writer.WriteAttributeString("name", "parameters");
                         writer.WriteAttributeString("element",
                                                     "tns:" + (operation.IsStreamRequest
@@ -480,12 +479,12 @@ namespace SoapCoreServer.BodyWriters
                     var headerName = $"{operation.Request.MessageName}_Headers";
                     if (!added.Contains(headerName))
                     {
-                        writer.WriteStartElement("wsdl:message");
+                        writer.WriteStartElement("wsdl", "message", SoapNamespaces.Wsdl);
                         writer.WriteAttributeString("name", headerName);
 
                         foreach (var header in operation.Request.Headers)
                         {
-                            writer.WriteStartElement("wsdl:part");
+                            writer.WriteStartElement("wsdl", "part", SoapNamespaces.Wsdl);
                             writer.WriteAttributeString("name", header.Name);
                             writer.WriteAttributeString("element", "tns:" + header.Name);
                             writer.WriteEndElement(); // wsdl:part
@@ -497,7 +496,7 @@ namespace SoapCoreServer.BodyWriters
                     }
                 }
 
-                // Output.
+                // Output
                 if (!operation.IsOneWay)
                 {
                     var responseMessageName = operation.IsStreamRequest
@@ -505,9 +504,9 @@ namespace SoapCoreServer.BodyWriters
                                                   : operation.Response.MessageName;
                     if (!added.Contains(responseMessageName))
                     {
-                        writer.WriteStartElement("wsdl:message");
+                        writer.WriteStartElement("wsdl", "message", SoapNamespaces.Wsdl);
                         writer.WriteAttributeString("name", responseMessageName);
-                        writer.WriteStartElement("wsdl:part");
+                        writer.WriteStartElement("wsdl", "part", SoapNamespaces.Wsdl);
                         writer.WriteAttributeString("name", "parameters");
                         writer.WriteAttributeString("element", "tns:" + operation.Response.MessageName);
                         writer.WriteEndElement(); // wsdl:part
@@ -521,16 +520,16 @@ namespace SoapCoreServer.BodyWriters
 
         private void WritePortTypes(XmlDictionaryWriter writer)
         {
-            writer.WriteStartElement("wsdl:portType");
+            writer.WriteStartElement("wsdl", "portType", SoapNamespaces.Wsdl);
             writer.WriteAttributeString("name", BindingType);
 
             foreach (var operation in _service.OperationDescriptions)
             {
-                writer.WriteStartElement("wsdl:operation");
+                writer.WriteStartElement("wsdl", "operation", SoapNamespaces.Wsdl);
                 writer.WriteAttributeString("name", operation.Name);
 
-                writer.WriteStartElement("wsdl:input");
-                writer.WriteAttributeString("wsaw:Action", operation.SoapAction);
+                writer.WriteStartElement("wsdl", "input", SoapNamespaces.Wsdl);
+                writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.SoapAction);
 
                 if (!(operation.IsEmptyRequest || operation.IsStreamRequest))
                 {
@@ -546,8 +545,8 @@ namespace SoapCoreServer.BodyWriters
 
                 if (!operation.IsOneWay)
                 {
-                    writer.WriteStartElement("wsdl:output");
-                    writer.WriteAttributeString("wsaw:Action", operation.ReplyAction);
+                    writer.WriteStartElement("wsdl", "output", SoapNamespaces.Wsdl);
+                    writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.ReplyAction);
 
                     if (!operation.IsStreamRequest)
                     {
@@ -576,32 +575,32 @@ namespace SoapCoreServer.BodyWriters
             {
                 var portInfo = GetPortInfo(endpoint);
 
-                writer.WriteStartElement("wsdl:binding");
+                writer.WriteStartElement("wsdl", "binding", SoapNamespaces.Wsdl);
                 writer.WriteAttributeString("name", portInfo.portName);
                 writer.WriteAttributeString("type", $"tns:{BindingType}");
 
                 if (!endpoint.Type.IsText())
                 {
-                    writer.WriteStartElement("wsp:PolicyReference");
+                    writer.WriteStartElement("wsp", "PolicyReference", SoapNamespaces.Wsp);
                     writer.WriteAttributeString("URI", $"#{portInfo.portName}_policy");
                     writer.WriteEndElement(); // wsp:PolicyReference
                 }
 
-                writer.WriteStartElement($"{portInfo.soapPrefix}:binding");
+                writer.WriteStartElement(portInfo.soapPrefix, "binding", portInfo.soapNs);
                 writer.WriteAttributeString("transport", TransportSchema);
                 writer.WriteEndElement(); // soap:binding
 
                 foreach (var operation in _service.OperationDescriptions)
                 {
-                    writer.WriteStartElement("wsdl:operation");
+                    writer.WriteStartElement("wsdl", "operation", SoapNamespaces.Wsdl);
                     writer.WriteAttributeString("name", operation.Name);
 
-                    writer.WriteStartElement($"{portInfo.soapPrefix}:operation");
+                    writer.WriteStartElement(portInfo.soapPrefix, "operation", portInfo.soapNs);
                     writer.WriteAttributeString("soapAction", operation.SoapAction);
                     writer.WriteAttributeString("style", "document");
                     writer.WriteEndElement(); // soap:operation
 
-                    writer.WriteStartElement("wsdl:input");
+                    writer.WriteStartElement("wsdl", "input", SoapNamespaces.Wsdl);
                     if (!(operation.IsEmptyRequest || operation.IsStreamRequest))
                     {
                         writer.WriteAttributeString("name", operation.Request.MessageName);
@@ -617,20 +616,20 @@ namespace SoapCoreServer.BodyWriters
                         writer.WriteEndElement(); // soap:header
                     }
 
-                    writer.WriteStartElement($"{portInfo.soapPrefix}:body");
+                    writer.WriteStartElement(portInfo.soapPrefix, "body", portInfo.soapNs);
                     writer.WriteAttributeString("use", "literal");
                     writer.WriteEndElement(); // soap:body
                     writer.WriteEndElement(); // wsdl:input
 
                     if (!operation.IsOneWay)
                     {
-                        writer.WriteStartElement("wsdl:output");
+                        writer.WriteStartElement("wsdl", "output", SoapNamespaces.Wsdl);
                         if (!operation.IsStreamRequest)
                         {
                             writer.WriteAttributeString("name", operation.Response.MessageName);
                         }
 
-                        writer.WriteStartElement($"{portInfo.soapPrefix}:body");
+                        writer.WriteStartElement(portInfo.soapPrefix, "body", portInfo.soapNs);
                         writer.WriteAttributeString("use", "literal");
                         writer.WriteEndElement(); // soap:body
                         writer.WriteEndElement(); // wsdl:output
@@ -647,33 +646,33 @@ namespace SoapCoreServer.BodyWriters
         {
             ResetCounters();
 
-            writer.WriteStartElement("wsdl:service");
+            writer.WriteStartElement("wsdl", "service", SoapNamespaces.Wsdl);
             writer.WriteAttributeString("name", _service.ServiceType.Name);
 
             foreach (var endpoint in _endpoints)
             {
                 var portInfo = GetPortInfo(endpoint);
 
-                writer.WriteStartElement("wsdl:port");
+                writer.WriteStartElement("wsdl", "port", SoapNamespaces.Wsdl);
                 writer.WriteAttributeString("name", portInfo.portName);
                 writer.WriteAttributeString("binding", $"tns:{portInfo.portName}");
 
                 if (endpoint.Type.IsText())
                 {
-                    writer.WriteStartElement("soap:address");
+                    writer.WriteStartElement("soap", "address", SoapNamespaces.Soap);
 
                     writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}");
                     writer.WriteEndElement(); // soap:address
                 }
                 else
                 {
-                    writer.WriteStartElement("soap12:address");
+                    writer.WriteStartElement("soap12", "address", SoapNamespaces.Soap12);
 
                     writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}");
                     writer.WriteEndElement(); // soap:address
 
-                    writer.WriteStartElement("wsa10:EndpointReference");
-                    writer.WriteStartElement("wsa10:Address");
+                    writer.WriteStartElement("wsa10", "EndpointReference", SoapNamespaces.Wsa10);
+                    writer.WriteStartElement("wsa10", "Address", SoapNamespaces.Wsa10);
                     writer.WriteString($"{_baseUrl}{endpoint.Url}");
                     writer.WriteEndElement(); // wsa10:Address
                     writer.WriteEndElement(); // wsa10:EndpointReference
@@ -691,16 +690,15 @@ namespace SoapCoreServer.BodyWriters
             {
                 var portInfo = GetPortInfo(endpoint);
 
-                writer.WriteStartElement("wsp:Policy");
-                writer.WriteAttributeString("wsu:Id", $"{portInfo.portName}_policy");
+                writer.WriteStartElement("wsp", "Policy", SoapNamespaces.Wsp);
+                writer.WriteAttributeString("wsu", "Id", SoapNamespaces.Wsu, $"{portInfo.portName}_policy");
 
-                writer.WriteStartElement("wsp:ExactlyOne");
-                writer.WriteStartElement("wsp:All");
+                writer.WriteStartElement("wsp", "ExactlyOne", SoapNamespaces.Wsp);
+                writer.WriteStartElement("wsp", "All", SoapNamespaces.Wsp);
 
-                writer.WriteStartElement("msb:BinaryEncoding");
-                writer.WriteAttributeString("xmlns:msb",
-                                            "http://schemas.microsoft.com/ws/06/2004/mspolicy/netbinary1");
-                writer.WriteStartElement("wsaw:UsingAddressing");
+                writer.WriteStartElement("msb", "BinaryEncoding", SoapNamespaces.Msb);
+                writer.WriteXmlnsAttribute("msb", SoapNamespaces.Msb);
+                writer.WriteStartElement("wsaw", "UsingAddressing", SoapNamespaces.Wsaw);
                 writer.WriteEndElement(); // wsaw:UsingAddressing
                 writer.WriteEndElement(); // msb:BinaryEncoding
 
@@ -716,22 +714,24 @@ namespace SoapCoreServer.BodyWriters
             _customBindingCounter = -1;
         }
 
-        private (string soapPrefix, string portName) GetPortInfo(Endpoint endpoint)
+        private (string soapPrefix, string soapNs, string portName) GetPortInfo(Endpoint endpoint)
         {
             var serviceTypeName = _service.ContractDescriptions.First().Name;
             if (endpoint.Type.IsText())
             {
                 _basicBindingCounter++;
                 return (soapPrefix: "soap",
-                           portName:
-                           $"BasicHttpBinding_{serviceTypeName}{(_basicBindingCounter > 0 ? _basicBindingCounter.ToString() : string.Empty)}");
+                        soapNs: SoapNamespaces.Soap,
+                        portName:
+                        $"BasicHttpBinding_{serviceTypeName}{(_basicBindingCounter > 0 ? _basicBindingCounter.ToString() : string.Empty)}");
             }
             else
             {
                 _customBindingCounter++;
                 return (soapPrefix: "soap12",
-                           portName:
-                           $"CustomBinding_{serviceTypeName}{(_customBindingCounter > 0 ? _customBindingCounter.ToString() : string.Empty)}");
+                        soapNs: SoapNamespaces.Soap12,
+                        portName:
+                        $"CustomBinding_{serviceTypeName}{(_customBindingCounter > 0 ? _customBindingCounter.ToString() : string.Empty)}");
             }
         }
 

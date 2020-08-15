@@ -1,10 +1,16 @@
 ﻿using System;
+using System.Text;
 
 namespace SoapCoreServer
 {
     public class Endpoint
     {
         public Endpoint(string url, MessageType type)
+            : this(url, type, Encoding.UTF8)
+        {
+        }
+
+        public Endpoint(string url, MessageType type, Encoding encoding)
         {
             if (string.IsNullOrWhiteSpace(url))
             {
@@ -18,10 +24,13 @@ namespace SoapCoreServer
 
             Url = url;
             Type = type;
+            Encoding = encoding;
         }
 
         public string Url { get; }
 
         public MessageType Type { get; }
+
+        public Encoding Encoding { get; }
     }
 }

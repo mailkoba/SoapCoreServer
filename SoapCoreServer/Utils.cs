@@ -67,60 +67,40 @@ namespace SoapCoreServer
         public static string ResolveType(Type type)
         {
             var typeName = type.IsEnum ? type.GetEnumUnderlyingType().Name : type.Name;
-            string resolvedType = null;
 
             switch (typeName)
             {
                 case "Boolean":
-                    resolvedType = "xs:boolean";
-                    break;
+                    return "xs:boolean";
                 case "Byte":
-                    resolvedType = "xs:unsignedByte";
-                    break;
+                    return "xs:unsignedByte";
                 case "Int16":
-                    resolvedType = "xs:short";
-                    break;
+                    return "xs:short";
                 case "Int32":
-                    resolvedType = "xs:int";
-                    break;
+                    return "xs:int";
                 case "Int64":
-                    resolvedType = "xs:long";
-                    break;
+                    return "xs:long";
                 case "SByte":
-                    resolvedType = "xs:byte";
-                    break;
+                    return "xs:byte";
                 case "UInt16":
-                    resolvedType = "xs:unsignedShort";
-                    break;
+                    return "xs:unsignedShort";
                 case "UInt32":
-                    resolvedType = "xs:unsignedInt";
-                    break;
+                    return "xs:unsignedInt";
                 case "UInt64":
-                    resolvedType = "xs:unsignedLong";
-                    break;
+                    return "xs:unsignedLong";
                 case "Decimal":
-                    resolvedType = "xs:decimal";
-                    break;
+                    return "xs:decimal";
                 case "Double":
-                    resolvedType = "xs:double";
-                    break;
+                    return "xs:double";
                 case "Single":
-                    resolvedType = "xs:float";
-                    break;
+                    return "xs:float";
                 case "DateTime":
-                    resolvedType = "xs:dateTime";
-                    break;
+                    return "xs:dateTime";
                 case "Guid":
-                    resolvedType = "ser:guid";
-                    break;
+                    return "ser:guid";
             }
 
-            if (string.IsNullOrEmpty(resolvedType))
-            {
-                throw new ArgumentException($".NET type {typeName} cannot be resolved into XML schema type!");
-            }
-
-            return resolvedType;
+            throw new ArgumentException($".NET type {typeName} cannot be resolved into XML schema type!");
         }
 
         public static string GetTypeNameByContract(Type type)
@@ -178,15 +158,15 @@ namespace SoapCoreServer
 
         public static void WriteSerializationSchema(XmlDictionaryWriter writer)
         {
-            writer.WriteStartElement("xs:schema");
-            writer.WriteAttributeString("xmlns:xs", "http://www.w3.org/2001/XMLSchema");
-            writer.WriteAttributeString("xmlns:tns", SerializationNs);
+            writer.WriteStartElement("xs", "schema", SoapNamespaces.Xsd);
+            writer.WriteXmlnsAttribute("xs", SoapNamespaces.Xsd);
+            writer.WriteXmlnsAttribute("tns", SerializationNs);
             writer.WriteAttributeString("elementFormDefault", "qualified");
             writer.WriteAttributeString("targetNamespace", SerializationNs);
 
             foreach (var elem in SerElements)
             {
-                writer.WriteStartElement("xs:element");
+                writer.WriteStartElement("xs", "element", SoapNamespaces.Xsd);
                 writer.WriteAttributeString("name", elem);
                 writer.WriteAttributeString("nillable", "true");
                 writer.WriteAttributeString("type", $"xs:{elem}");
@@ -195,42 +175,42 @@ namespace SoapCoreServer
 
             // 
 
-            writer.WriteStartElement("xs:element");
+            writer.WriteStartElement("xs", "element", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "char");
             writer.WriteAttributeString("nillable", "true");
             writer.WriteAttributeString("type", "tns:char");
             writer.WriteEndElement(); // xs:element
 
-            writer.WriteStartElement("xs:simpleType");
+            writer.WriteStartElement("xs", "simpleType", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "char");
-            writer.WriteStartElement("xs:restriction");
+            writer.WriteStartElement("xs", "restriction", SoapNamespaces.Xsd);
             writer.WriteAttributeString("base", "xs:int");
             writer.WriteEndElement(); // xs:restriction
             writer.WriteEndElement(); // xs:simpleType
 
             //
 
-            writer.WriteStartElement("xs:element");
+            writer.WriteStartElement("xs", "element", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "duration");
             writer.WriteAttributeString("nillable", "true");
             writer.WriteAttributeString("type", "tns:duration");
             writer.WriteEndElement(); // xs:element
 
-            writer.WriteStartElement("xs:simpleType");
+            writer.WriteStartElement("xs", "simpleType", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "duration");
 
-            writer.WriteStartElement("xs:restriction");
+            writer.WriteStartElement("xs", "restriction", SoapNamespaces.Xsd);
             writer.WriteAttributeString("base", "xs:duration");
 
-            writer.WriteStartElement("xs:pattern");
+            writer.WriteStartElement("xs", "pattern", SoapNamespaces.Xsd);
             writer.WriteAttributeString("value", @"\-?P(\d*D)?(T(\d*H)?(\d*M)?(\d*(\.\d*)?S)?)?");
             writer.WriteEndElement(); // xs:pattern
 
-            writer.WriteStartElement("xs:minInclusive");
+            writer.WriteStartElement("xs", "minInclusive", SoapNamespaces.Xsd);
             writer.WriteAttributeString("value", "-P10675199DT2H48M5.4775808S");
             writer.WriteEndElement(); // xs:minInclusive
 
-            writer.WriteStartElement("xs:maxInclusive");
+            writer.WriteStartElement("xs", "maxInclusive", SoapNamespaces.Xsd);
             writer.WriteAttributeString("value", "P10675199DT2H48M5.4775807S");
             writer.WriteEndElement(); // xs:maxInclusive
 
@@ -239,19 +219,19 @@ namespace SoapCoreServer
 
             //
 
-            writer.WriteStartElement("xs:element");
+            writer.WriteStartElement("xs", "element", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "guid");
             writer.WriteAttributeString("nillable", "true");
             writer.WriteAttributeString("type", "tns:guid");
             writer.WriteEndElement(); // xs:element
 
-            writer.WriteStartElement("xs:simpleType");
+            writer.WriteStartElement("xs", "simpleType", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "guid");
 
-            writer.WriteStartElement("xs:restriction");
+            writer.WriteStartElement("xs", "restriction", SoapNamespaces.Xsd);
             writer.WriteAttributeString("base", "xs:string");
 
-            writer.WriteStartElement("xs:pattern");
+            writer.WriteStartElement("xs", "pattern", SoapNamespaces.Xsd);
             writer.WriteAttributeString("value", @"[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}");
             writer.WriteEndElement(); // xs:pattern
 
@@ -260,17 +240,17 @@ namespace SoapCoreServer
 
             //
 
-            writer.WriteStartElement("xs:attribute");
+            writer.WriteStartElement("xs", "attribute", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "FactoryType");
             writer.WriteAttributeString("type", "xs:QName");
             writer.WriteEndElement(); // xs:attribute
 
-            writer.WriteStartElement("xs:attribute");
+            writer.WriteStartElement("xs", "attribute", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "Id");
             writer.WriteAttributeString("type", "xs:ID");
             writer.WriteEndElement(); // xs:attribute
 
-            writer.WriteStartElement("xs:attribute");
+            writer.WriteStartElement("xs", "attribute", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "Ref");
             writer.WriteAttributeString("type", "xs:IDREF");
             writer.WriteEndElement(); // xs:attribute
@@ -280,16 +260,16 @@ namespace SoapCoreServer
 
         public static void WriteStreamSchema(XmlDictionaryWriter writer)
         {
-            writer.WriteStartElement("xs:schema");
-            writer.WriteAttributeString("xmlns:xs", "http://www.w3.org/2001/XMLSchema");
-            writer.WriteAttributeString("xmlns:tns", StreamNs);
+            writer.WriteStartElement("xs", "schema", SoapNamespaces.Xsd);
+            writer.WriteXmlnsAttribute("xs", SoapNamespaces.Xsd);
+            writer.WriteXmlnsAttribute("tns", StreamNs);
             writer.WriteAttributeString("elementFormDefault", "qualified");
             writer.WriteAttributeString("targetNamespace", StreamNs);
 
-            writer.WriteStartElement("xs:simpleType");
+            writer.WriteStartElement("xs", "simpleType", SoapNamespaces.Xsd);
             writer.WriteAttributeString("name", "StreamBody");
 
-            writer.WriteStartElement("xs:restriction");
+            writer.WriteStartElement("xs", "restriction", SoapNamespaces.Xsd);
             writer.WriteAttributeString("base", "xs:base64Binary");
 
             writer.WriteEndElement(); // xs:restriction

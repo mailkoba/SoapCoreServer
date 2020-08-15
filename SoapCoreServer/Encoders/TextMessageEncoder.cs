@@ -8,18 +8,18 @@ using System.Xml;
 
 namespace SoapCoreServer.Encoders
 {
-    internal class BinaryMessageEncoder : IMessageEncoder
+    internal class TextMessageEncoder : IMessageEncoder
     {
-        public BinaryMessageEncoder(Encoding encoding)
+        public TextMessageEncoder(Encoding encoding)
         {
             Encoding = encoding;
         }
 
-        public MessageVersion MessageVersion => MessageVersion.Soap12WSAddressing10;
+        public MessageVersion MessageVersion => MessageVersion.Soap11;
 
-        public string ContentType => "application/soap+msbin1";
+        public string ContentType => "text/xml";
 
-        public string MediaType => "application/soap+xml";
+        public string MediaType => "text/xml";
 
         public Encoding Encoding { get; }
 
@@ -40,16 +40,17 @@ namespace SoapCoreServer.Encoders
                 throw new ArgumentNullException(nameof (stream));
             }
 
-            var reader = XmlDictionaryReader.CreateBinaryReader(stream,
-                WcfBinary.WcfBinaryDictionary,
-                XmlDictionaryReaderQuotas.Max);
+            var reader = XmlDictionaryReader.CreateTextReader(stream,
+                                                              Encoding,
+                                                              XmlDictionaryReaderQuotas.Max,
+                                                              _ => { });
 
             var message = Message.CreateMessage(reader, maxSizeOfHeaders, MessageVersion);
 
             return Task.FromResult(message);
         }
 
-        public async Task WriteMessageAsync(Message message, PipeWriter pipeWriter)
+        public virtual async Task WriteMessageAsync(Message message, PipeWriter pipeWriter)
         {
             if (message == null)
             {
@@ -61,47 +62,57 @@ namespace SoapCoreServer.Encoders
                 throw new ArgumentNullException(nameof (pipeWriter));
             }
 
-            using var writer = XmlDictionaryWriter.CreateBinaryWriter(pipeWriter.AsStream(true));
+            using var xmlTextWriter = XmlDictionaryWriter.CreateTextWriter(pipeWriter.AsStream(true), Encoding, false);
 
             if (IsUtf8)
             {
-                message.WriteMessage(writer);
+                message.WriteMessage(xmlTextWriter);
             }
             else
             {
                 // ReSharper disable once MethodHasAsyncOverload
-                writer.WriteStartDocument();
+                xmlTextWriter.WriteStartDocument();
 
-                message.WriteMessage(writer);
+                message.WriteMessage(xmlTextWriter);
 
                 // ReSharper disable once MethodHasAsyncOverload
-                writer.WriteEndDocument();
+                xmlTextWriter.WriteEndDocument();
             }
 
-            await writer.FlushAsync();
+            await xmlTextWriter.FlushAsync();
             await pipeWriter.FlushAsync();
         }
 
-        public Task WriteMessage(Message message, Stream stream)
+        public virtual Task WriteMessage(Message message, Stream stream)
         {
-            using var writer = XmlDictionaryWriter.CreateBinaryWriter(stream);
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof (message));
+            }
+
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof (stream));
+            }
+
+            using var xmlTextWriter = XmlDictionaryWriter.CreateTextWriter(stream, Encoding, false);
 
             if (IsUtf8)
             {
-                message.WriteMessage(writer);
+                message.WriteMessage(xmlTextWriter);
             }
             else
             {
                 // ReSharper disable once MethodHasAsyncOverload
-                writer.WriteStartDocument();
+                xmlTextWriter.WriteStartDocument();
 
-                message.WriteMessage(writer);
+                message.WriteMessage(xmlTextWriter);
 
                 // ReSharper disable once MethodHasAsyncOverload
-                writer.WriteEndDocument();
+                xmlTextWriter.WriteEndDocument();
             }
 
-            writer.Flush();
+            xmlTextWriter.Flush();
 
             return Task.CompletedTask;
         }

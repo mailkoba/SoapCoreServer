@@ -1,9 +1,11 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.ServiceModel;
 using System.ServiceModel.Channels;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using SoapCoreServer.BodyWriters;
 using SoapCoreServer.Descriptions;
 using SoapCoreServer.Encoders;
+using SoapCoreServer.Messages;
 
 namespace SoapCoreServer
 {
@@ -39,10 +42,11 @@ namespace SoapCoreServer
 
         public async Task Invoke(HttpContext httpContext)
         {
-            if (httpContext.Request.Path.StartsWithSegments(_basePath, StringComparison.Ordinal))
+            if (httpContext.Request.Path.StartsWithSegments(_basePath, StringComparison.InvariantCultureIgnoreCase))
             {
-                _logger.LogInformation(
-                    $"Request for {httpContext.Request.Path} received ({httpContext.Request.ContentLength ?? 0} bytes)");
+                httpContext.Request.EnableBuffering();
+
+                _logger.LogInformation($"Request for {httpContext.Request.Path} received ({httpContext.Request.ContentLength ?? 0} bytes)");
 
                 if (httpContext.Request.Method?.ToLower() == "get" &&
                     (httpContext.Request.Query.ContainsKey("singleWsdl") ||
@@ -76,56 +80,54 @@ namespace SoapCoreServer
 
         private async Task ProcessMeta(HttpContext httpContext)
         {
-            await Task.Run(() =>
-            {
-                var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}{httpContext.Request.Path}";
+            var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}{httpContext.Request.Path}";
 
-                var bodyWriter = new MetaBodyWriter(_serviceDescription, baseUrl, _endpoints);
-                var encoder = EncoderFactory.DefaultEncoder;
+            var bodyWriter = new MetaBodyWriter(_serviceDescription, baseUrl, _endpoints);
+            var encoder = EncoderFactory.Create(MessageType.Text, Encoding.UTF8);
 
-                var responseMessage = Message.CreateMessage(encoder.MessageVersion, null, bodyWriter);
-                responseMessage = new MetaMessage(responseMessage, _serviceDescription);
+            var responseMessage = Message.CreateMessage(encoder.MessageVersion, null, bodyWriter);
+            responseMessage = new MetaMessage(responseMessage, _serviceDescription);
 
-                httpContext.Response.ContentType = encoder.ContentType;
-                encoder.WriteMessage(responseMessage, httpContext.Response.Body);
-            });
+            httpContext.Response.ContentType = encoder.ContentType;
+
+            await WriteMessageAsync(encoder, responseMessage, httpContext);
         }
 
-        private MessageType? GetMessageType(HttpContext httpContext)
+        private Endpoint GetEndpoint(HttpContext httpContext)
         {
             var path = httpContext.Request.Path.Value;
             if (path.Length < _basePath.Length)
             {
                 return null;
             }
+
             var endpointUrl = path.Substring(_basePath.Length, path.Length - _basePath.Length);
             if (string.IsNullOrWhiteSpace(endpointUrl))
             {
                 endpointUrl = "/";
             }
 
-            var endpoint = _endpoints.FirstOrDefault(
-                x => x.Url.Equals(endpointUrl, StringComparison.OrdinalIgnoreCase));
+            var endpoint = _endpoints.FirstOrDefault(x => x.Url.Equals(endpointUrl,
+                                                                       StringComparison.InvariantCultureIgnoreCase));
 
-            return endpoint?.Type;
+            return endpoint;
         }
 
         private Message CreateResponseMessage(OperationDescription operation,
-                                              MessageEncoder messageEncoder,
+                                              IMessageEncoder messageEncoder,
                                               object value)
         {
             Message responseMessage;
             if (operation.IsOneWay)
             {
-                responseMessage = new CustomMessage(
-                    Message.CreateMessage(messageEncoder.MessageVersion, null));
+                responseMessage = new CustomMessage(Message.CreateMessage(messageEncoder.MessageVersion, null));
             }
             else
             {
-                var bodyWriter = new WrappedBodyWriter(
-                    operation.Response.WrapperNamespace ?? operation.ContractDescription.Namespace,
-                    operation.Response.MessageName,
-                    value ?? new object());
+                var bodyWriter = new WrappedBodyWriter(operation.Response.WrapperNamespace ??
+                                                       operation.ContractDescription.Namespace,
+                                                       operation.Response.MessageName,
+                                                       value ?? new object());
 
                 responseMessage = Message.CreateMessage(messageEncoder.MessageVersion, null, bodyWriter);
                 responseMessage = new CustomMessage(responseMessage);
@@ -134,22 +136,22 @@ namespace SoapCoreServer
             return responseMessage;
         }
 
+        // ReSharper disable once UnusedMethodReturnValue.Local
         private async Task<Message> ProcessOperation(HttpContext httpContext)
         {
-            var messageType = GetMessageType(httpContext);
-            if (!messageType.HasValue)
+            var endpoint = GetEndpoint(httpContext);
+            if (endpoint == null)
             {
                 await ProcessInfoPage(httpContext);
                 return null;
             }
-            if (messageType.Value.IsStreamed())
+
+            if (endpoint.Type.IsStreamed())
             {
-                return await ProcessStreamedRequest(httpContext, messageType.Value);
+                return await ProcessStreamedRequest(httpContext, endpoint.Type, endpoint.Encoding);
             }
-            else
-            {
-                return await ProcessBufferedRequest(httpContext, messageType.Value);
-            }
+
+            return await ProcessBufferedRequest(httpContext, endpoint.Type, endpoint.Encoding);
         }
 
         private async Task ProcessInfoPage(HttpContext httpContext)
@@ -167,33 +169,29 @@ namespace SoapCoreServer
             await httpContext.Response.WriteAsync(pageText);
         }
 
-        private async Task<Message> ProcessStreamedRequest(HttpContext httpContext, MessageType messageType)
+        private async Task<Message> ProcessStreamedRequest(HttpContext httpContext, MessageType messageType, Encoding encoding)
         {
             Message responseMessage;
             try
             {
-                var messageEncoder = EncoderFactory.Create(messageType);
+                var messageEncoder = EncoderFactory.Create(messageType, encoding);
 
-                CheckContentType(messageEncoder.ContentType, httpContext.Request.ContentType);
+                CheckContentType(messageEncoder.ContentType, encoding, httpContext.Request.ContentType);
 
-                var requestMessage = messageEncoder.ReadMessage(httpContext.Request.Body,
-                                                                MaxSizeOfHeaders,
-                                                                httpContext.Request.ContentType);
+                var requestMessage = await ReadMessageAsync(httpContext, messageEncoder);
 
                 var soapAction = messageType == MessageType.StreamText
-                                     ? httpContext.Request.Headers[SoapAction].Single().Trim('"')
-                                     : requestMessage.Headers.Action;
+                    ? httpContext.Request.Headers[SoapAction].Single().Trim('"')
+                    : requestMessage.Headers.Action;
 
                 var operation = _serviceDescription
                                 .OperationDescriptions
-                                .FirstOrDefault(
-                                    x => x.SoapAction.Equals(soapAction, StringComparison.Ordinal) ||
-                                         x.Name.Equals(soapAction, StringComparison.Ordinal));
+                                .FirstOrDefault(x => x.SoapAction.Equals(soapAction, StringComparison.Ordinal) ||
+                                                     x.Name.Equals(soapAction, StringComparison.Ordinal));
 
                 if (operation == null)
                 {
-                    throw new InvalidOperationException(
-                        $"No operation found for specified action: {soapAction}");
+                    throw new InvalidOperationException($"No operation found for specified action: {soapAction}");
                 }
 
                 var serviceInstance = httpContext.RequestServices.GetService(_serviceDescription.ServiceType);
@@ -210,13 +208,13 @@ namespace SoapCoreServer
                                                           operation.ContractDescription.Namespace,
                                                           operation.Request.MessageName,
                                                           operation.ContractDescription.Namespace);
-                    arguments = new object[] { stream };
+                    arguments = new object[] {stream};
                 }
                 else
                 {
                     arguments = operation.IsEmptyRequest
-                                    ? new object[0]
-                                    : RequestHelper.GetRequestArguments(requestMessage, operation);
+                        ? new object[0]
+                        : RequestHelper.GetRequestArguments(requestMessage, operation);
                 }
 
                 var responseObject = await RunMethod(operation, serviceInstance, arguments);
@@ -228,57 +226,53 @@ namespace SoapCoreServer
                 httpContext.Response.ContentType = httpContext.Request.ContentType;
                 httpContext.Response.Headers[SoapAction] = operation.ReplyAction;
 
-                messageEncoder.WriteMessage(responseMessage, httpContext.Response.Body);
+                await WriteMessageAsync(messageEncoder, responseMessage, httpContext);
             }
             catch (Exception exception)
             {
                 _logger.LogError(0, exception, exception.Message);
-                responseMessage = WriteErrorResponseMessage(exception,
-                                                            StatusCodes.Status500InternalServerError,
-                                                            httpContext);
+                responseMessage = await WriteErrorResponseMessage(exception,
+                                                                  StatusCodes.Status500InternalServerError,
+                                                                  httpContext);
             }
 
             return responseMessage;
         }
 
-        private async Task<Message> ProcessBufferedRequest(HttpContext httpContext, MessageType messageType)
+        private async Task<Message> ProcessBufferedRequest(HttpContext httpContext, MessageType messageType, Encoding encoding)
         {
             try
             {
                 if (httpContext.Request.ContentLength > 0)
                 {
-                    var messageEncoder = EncoderFactory.Create(messageType);
+                    var messageEncoder = EncoderFactory.Create(messageType, encoding);
 
-                    CheckContentType(messageEncoder.ContentType, httpContext.Request.ContentType);
+                    CheckContentType(messageEncoder.ContentType, encoding, httpContext.Request.ContentType);
 
-                    var requestMessage = messageEncoder.ReadMessage(httpContext.Request.Body,
-                                                                    MaxSizeOfHeaders,
-                                                                    httpContext.Request.ContentType);
+                    var requestMessage = await ReadMessageAsync(httpContext, messageEncoder);
 
                     var soapAction = messageType == MessageType.Text
-                                         ? httpContext.Request.Headers[SoapAction].Single().Trim('"')
-                                         : requestMessage.Headers.Action;
+                        ? httpContext.Request.Headers[SoapAction].Single().Trim('"')
+                        : requestMessage.Headers.Action;
 
-                    var operation = _serviceDescription.OperationDescriptions
-                                                       .FirstOrDefault(
-                                                           x => x.SoapAction.Equals(soapAction,
-                                                                                    StringComparison.Ordinal) ||
-                                                                x.Name.Equals(soapAction, StringComparison.Ordinal));
+                    var operation = _serviceDescription
+                                    .OperationDescriptions
+                                    .FirstOrDefault(x => x.SoapAction.Equals(soapAction, StringComparison.Ordinal) ||
+                                                         x.Name.Equals(soapAction, StringComparison.Ordinal));
 
                     if (operation == null)
                     {
-                        throw new InvalidOperationException(
-                            $"No operation found for specified action: {soapAction}");
+                        throw new InvalidOperationException($"No operation found for specified action: {soapAction}");
                     }
 
-                    _logger.LogInformation(
-                        $"Request for operation {operation.ContractDescription.Name}.{operation.Name} received");
+                    _logger.LogInformation($"Request for operation {operation.ContractDescription.Name}.{operation.Name} received");
 
-                    var serviceInstance = httpContext.RequestServices.GetRequiredService(_serviceDescription.ServiceType);
+                    var serviceInstance = httpContext.RequestServices
+                                                     .GetRequiredService(_serviceDescription.ServiceType);
 
                     var arguments = operation.IsEmptyRequest
-                                        ? new object[0]
-                                        : RequestHelper.GetRequestArguments(requestMessage, operation);
+                        ? new object[0]
+                        : RequestHelper.GetRequestArguments(requestMessage, operation);
 
                     var responseObject = await RunMethod(operation, serviceInstance, arguments);
 
@@ -289,7 +283,7 @@ namespace SoapCoreServer
                     httpContext.Response.ContentType = httpContext.Request.ContentType;
                     httpContext.Response.Headers[SoapAction] = operation.ReplyAction;
 
-                    messageEncoder.WriteMessage(responseMessage, httpContext.Response.Body);
+                    await WriteMessageAsync(messageEncoder, responseMessage, httpContext);
 
                     return responseMessage;
                 }
@@ -309,9 +303,9 @@ namespace SoapCoreServer
             catch (Exception exception)
             {
                 _logger.LogError(0, exception, exception.Message);
-                return WriteErrorResponseMessage(exception,
-                                                 StatusCodes.Status500InternalServerError,
-                                                 httpContext);
+                return await WriteErrorResponseMessage(exception,
+                                                       StatusCodes.Status500InternalServerError,
+                                                       httpContext);
             }
 
             return null;
@@ -322,14 +316,17 @@ namespace SoapCoreServer
                                              object[] arguments)
         {
             var responseObject = operation.DispatchMethod.Invoke(serviceInstance, arguments);
+
             if (operation.DispatchMethod.ReturnType.IsTask())
             {
                 var responseTask = (Task) responseObject;
+                // ReSharper disable once PossibleNullReferenceException
                 await responseTask;
             }
             else if (operation.DispatchMethod.ReturnType.IsValuableTask())
             {
                 var responseTask = (Task) responseObject;
+                // ReSharper disable once PossibleNullReferenceException
                 await responseTask;
                 responseObject = responseTask.GetType().GetProperty("Result")?.GetValue(responseTask);
             }
@@ -337,67 +334,97 @@ namespace SoapCoreServer
             return responseObject;
         }
 
-        private Message WriteErrorResponseMessage(Exception exception, int statusCode, HttpContext httpContext)
+        private async Task<Message> WriteErrorResponseMessage(Exception exception,
+                                                              int statusCode,
+                                                              HttpContext httpContext)
         {
             var ex = exception.InnerException ?? exception;
 
             var transformer = httpContext.RequestServices.GetService<ExceptionTransformer>();
             var errorText = transformer == null ? ex.Message : transformer.Transform(ex);
 
-            var messageType = GetMessageType(httpContext) ?? MessageType.Text;
-            var messageEncoder = EncoderFactory.Create(messageType);
+            var endpoint = GetEndpoint(httpContext);
+            var messageEncoder = EncoderFactory.Create(endpoint?.Type ?? MessageType.Text,
+                                                       endpoint?.Encoding ?? Encoding.UTF8);
 
-            var msgFault = new FaultException(new FaultReason(errorText), new FaultCode("100"), SoapFaultNs)
+            var msgFault = new FaultException(new FaultReason(errorText), new FaultCode("Server"), SoapFaultNs)
                 .CreateMessageFault();
 
             var msg = new FaultMessage(msgFault);
 
             var bodyWriter = new FaultBodyWriter(msg, messageEncoder.MessageVersion.Envelope);
-            var responseMessage = Message.CreateMessage(messageEncoder.MessageVersion,
-                                                        messageEncoder.MessageVersion.Envelope == EnvelopeVersion.Soap11
-                                                            ? null
-                                                            : SoapFaultNs,
-                                                        bodyWriter);
-
+            var responseMessage = new CustomMessage(Message.CreateMessage(messageEncoder.MessageVersion,
+                                                                          messageEncoder.MessageVersion.Envelope ==
+                                                                          EnvelopeVersion.Soap11
+                                                                              ? null
+                                                                              : SoapFaultNs,
+                                                                          bodyWriter));
             httpContext.Response.ContentType = messageEncoder.ContentType;
             httpContext.Response.StatusCode = statusCode;
 
-            messageEncoder.WriteMessage(responseMessage, httpContext.Response.Body);
+            await WriteMessageAsync(messageEncoder, responseMessage, httpContext);
 
             return responseMessage;
         }
 
-        private string GetInfoPage()
+#if NETCORE_21
+        private static Task WriteMessageAsync(IMessageEncoder messageEncoder,
+                                              Message responseMessage,
+                                              HttpContext httpContext)
         {
-            string value;
-            var type = GetType();
-            using (var template = type.GetTypeInfo()
-                                      .Assembly
-                                      .GetManifestResourceStream(type, "page.html"))
-            {
-                using (var sr = new StreamReader(template ?? throw new InvalidOperationException("page.html")))
-                {
-                    value = sr.ReadToEnd();
-                }
-            }
-
-            return value;
+            return messageEncoder.WriteMessage(responseMessage, httpContext.Response.Body);
         }
 
-        private void CheckContentType(string originalContentType, string checkedContentType)
+        private static Task<Message> ReadMessageAsync(HttpContext httpContext, IMessageEncoder messageEncoder)
         {
-            if (originalContentType.Equals(checkedContentType,
-                                           StringComparison.OrdinalIgnoreCase)) return;
+            return messageEncoder.ReadMessage(httpContext.Request.Body,
+                                              MaxSizeOfHeaders,
+                                              httpContext.Request.ContentType);
+        }
+#endif
+#if NETCORE_30
+        private static Task WriteMessageAsync(IMessageEncoder messageEncoder,
+                                              Message responseMessage,
+                                              HttpContext httpContext)
+        {
+            return messageEncoder.WriteMessageAsync(responseMessage, httpContext.Response.BodyWriter);
+        }
 
-            var origArray = originalContentType.Split(';');
-            var checkArray = checkedContentType.Split(';');
+        private static Task<Message> ReadMessageAsync(HttpContext httpContext, IMessageEncoder messageEncoder)
+        {
+            return messageEncoder.ReadMessageAsync(httpContext.Request.BodyReader,
+                                                   MaxSizeOfHeaders,
+                                                   httpContext.Request.ContentType);
+        }
+#endif
 
-            if (origArray.Length == checkArray.Length)
+        private string GetInfoPage()
+        {
+            var type = GetType();
+
+            using var template = type.GetTypeInfo()
+                                     .Assembly
+                                     .GetManifestResourceStream(type, "page.html");
+            using var sr = new StreamReader(template ?? throw new InvalidOperationException("page.html"));
+
+            return sr.ReadToEnd();
+        }
+
+        private void CheckContentType(string originalContentType, Encoding originalEncoding, string checkedContentType)
+        {
+            if (MediaTypeHeaderValue.TryParse(checkedContentType, out var parsedContentType))
             {
-                var equals = !origArray.Where((t, i) => !t.Trim().Equals(checkArray[i].Trim(),
-                                                                         StringComparison.OrdinalIgnoreCase))
-                                       .Any();
-                if (equals) return;
+                if (parsedContentType.MediaType.Equals(originalContentType,
+                                                       StringComparison.InvariantCultureIgnoreCase))
+                {
+                    if (parsedContentType.CharSet.Equals(originalEncoding.WebName,
+                                                         StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    throw new Exception($"Charset must be {originalEncoding.WebName}");
+                }
             }
 
             throw new Exception($"Content-Type must be {originalContentType}");

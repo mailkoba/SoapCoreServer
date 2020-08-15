@@ -1,6 +1,7 @@
 ﻿using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.Xml;
+using SoapCoreServer.Messages;
 
 namespace SoapCoreServer.BodyWriters
 {

@@ -5,7 +5,7 @@ using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.Xml;
 
-namespace SoapCoreServer
+namespace SoapCoreServer.Messages
 {
     public class FaultMessage : MessageFault
     {
@@ -94,6 +94,7 @@ namespace SoapCoreServer
                                                               .GetProperty("Translations")
                                                               .GetValue(Reason);
 
+            // ReSharper disable once PossibleNullReferenceException
             foreach (var text in translations)
             {
                 writer.WriteStartElement(WcfBinary.GetString("Text"), ns);
@@ -130,10 +131,14 @@ namespace SoapCoreServer
             var prefix = writer.LookupPrefix(nsString);
             if (prefix == null)
             {
-                writer.WriteAttributeString("xmlns", "a", "http://www.w3.org/2000/xmlns/", nsString);
+                writer.WriteXmlnsAttribute("a", ns);
+                writer.WriteString($"a:{faultCode.Name}");
+            }
+            else
+            {
+                writer.WriteString($"{prefix}:{faultCode.Name}");
             }
 
-            writer.WriteQualifiedName(faultCode.Name, nsString);
             writer.WriteEndElement();
 
             if (faultCode.SubCode != null)
@@ -154,7 +159,9 @@ namespace SoapCoreServer
 
             var faultCode = Code;
             if (faultCode.SubCode != null)
+            {
                 faultCode = faultCode.SubCode;
+            }
 
             string name;
             if (faultCode.IsSenderFault)
@@ -177,17 +184,24 @@ namespace SoapCoreServer
             var prefix = writer.LookupPrefix(ns);
             if (prefix == null)
             {
-                writer.WriteAttributeString("xmlns", "a", "http://www.w3.org/2000/xmlns/", ns);
+                writer.WriteXmlnsAttribute("a", ns);
+                writer.WriteString($"a:{name}");
             }
-
-            writer.WriteQualifiedName(name, ns);
+            else
+            {
+                writer.WriteString($"{prefix}:{name}");
+            }
+            
             writer.WriteEndElement();
 
-            // ReSharper disable once PossibleNullReferenceException
+            // ReSharper disable AssignNullToNotNullAttribute
+            // ReSharper disable PossibleNullReferenceException
             var translation = ((ICollection<FaultReasonText>) typeof (FaultReason)
-                                                               .GetProperty("Translations")
-                                                               .GetValue(Reason))
+                                                              .GetProperty("Translations")
+                                                              .GetValue(Reason))
                 .First();
+            // ReSharper restore PossibleNullReferenceException
+            // ReSharper restore AssignNullToNotNullAttribute
 
             writer.WriteStartElement(WcfBinary.GetString("faultstring"), WcfBinary.GetString(""));
             if (translation.XmlLang.Length > 0)

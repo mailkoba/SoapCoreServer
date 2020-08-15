@@ -1,7 +1,7 @@
 ﻿using System.ServiceModel.Channels;
 using System.Xml;
 
-namespace SoapCoreServer
+namespace SoapCoreServer.Messages
 {
     public class CustomMessage : Message
     {
@@ -12,10 +12,9 @@ namespace SoapCoreServer
 
         protected override void OnWriteStartEnvelope(XmlDictionaryWriter writer)
         {
-            writer.WriteStartDocument();
-            writer.WriteStartElement("s", "Envelope", Version.Envelope.GetEnvelopeNamespace());
-            writer.WriteAttributeString("xmlns:xsd", "http://www.w3.org/2001/XMLSchema");
-            writer.WriteAttributeString("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+            _message.WriteStartEnvelope(writer);
+            writer.WriteXmlnsAttribute("xsd", SoapNamespaces.Xsd);
+            writer.WriteXmlnsAttribute("xsi", "http://www.w3.org/2001/XMLSchema-instance");
         }
 
         protected override void OnWriteBodyContents(XmlDictionaryWriter writer)

@@ -1,11 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.0</TargetFramework>
+        <TargetFrameworks>netcoreapp3.0;netcoreapp3.1;netstandard2.0;netcoreapp2.1</TargetFrameworks>
         <Product>SoapCoreServer</Product>
         <Authors>mailkoba</Authors>
         <Description>ASP .Net Core implementation of Soap Server. Supports part of features of WCF (Windows Communication Foundation) in .Net Framework 4.x.</Description>
         <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+        <LangVersion>8.0</LangVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="$(TargetFramework) == 'netstandard2.0'">
+        <DefineConstants>NETCORE_21</DefineConstants>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="$(TargetFramework) == 'netcoreapp2.1'">
+        <DefineConstants>NETCORE_21</DefineConstants>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="$(TargetFramework) == 'netcoreapp3.0'">
+        <DefineConstants>NETCORE_30</DefineConstants>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="$(TargetFramework) == 'netcoreapp3.1'">
+        <DefineConstants>NETCORE_30</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup>
@@ -30,10 +47,27 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.2.2" />
-        <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="3.1.2" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.2" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="3.1.2" />
         <PackageReference Include="System.ServiceModel.Primitives" Version="4.7.0" />
         <PackageReference Include="System.ServiceModel.Http" Version="4.7.0" />
+        <PackageReference Include="System.CodeDom" Version="4.7.0" />
+        <PackageReference Include="System.IO.Pipelines" Version="4.7.0" />
+    </ItemGroup>
+
+    <ItemGroup Condition="$(TargetFramework) == 'netstandard2.0'">
+        <PackageReference Include="System.Xml.XmlDocument" Version="4.3.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.2.2" />
+    </ItemGroup>
+
+    <ItemGroup Condition="$(TargetFramework) == 'netcoreapp2.1'">
+        <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.2.2" />
+    </ItemGroup>
+
+    <ItemGroup Condition="$(TargetFramework) == 'netcoreapp3.0' OR $(TargetFramework) == 'netcoreapp3.1'">
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="3.1.2" />
     </ItemGroup>
 
     <ItemGroup>
