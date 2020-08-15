@@ -417,7 +417,8 @@ namespace SoapCoreServer
                 if (parsedContentType.MediaType.Equals(originalContentType,
                                                        StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if (parsedContentType.CharSet.Equals(originalEncoding.WebName,
+                    if (string.IsNullOrEmpty(parsedContentType.CharSet) ||
+                        parsedContentType.CharSet.Equals(originalEncoding.WebName,
                                                          StringComparison.InvariantCultureIgnoreCase))
                     {
                         return;

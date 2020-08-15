@@ -41,7 +41,11 @@ namespace SoapCoreServerWebDemo
                                              new Endpoint("/text", MessageType.Text),
                                              new Endpoint("/gzip", MessageType.BinaryGZip),
                                              new Endpoint("/deflate", MessageType.BinaryDeflate),
-                                             new Endpoint("/bin", MessageType.Binary)
+                                             new Endpoint("/binary", MessageType.Binary),
+                                             new Endpoint("/stext", MessageType.StreamText),
+                                             new Endpoint("/sgzip", MessageType.StreamBinaryGZip),
+                                             new Endpoint("/sdeflate", MessageType.StreamBinaryDeflate),
+                                             new Endpoint("/sbinary", MessageType.StreamBinary)
                                             );
 
             app.UseEndpoints(endpoints =>

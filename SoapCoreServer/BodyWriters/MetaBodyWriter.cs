@@ -661,14 +661,14 @@ namespace SoapCoreServer.BodyWriters
                 {
                     writer.WriteStartElement("soap", "address", SoapNamespaces.Soap);
 
-                    writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}");
+                    writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}".Replace("//", string.Empty));
                     writer.WriteEndElement(); // soap:address
                 }
                 else
                 {
                     writer.WriteStartElement("soap12", "address", SoapNamespaces.Soap12);
 
-                    writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}");
+                    writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}".Replace("//", string.Empty));
                     writer.WriteEndElement(); // soap:address
 
                     writer.WriteStartElement("wsa10", "EndpointReference", SoapNamespaces.Wsa10);
