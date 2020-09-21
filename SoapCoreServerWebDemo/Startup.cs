@@ -37,16 +37,16 @@ namespace SoapCoreServerWebDemo
 
             app.UseAuthorization();
 
-            app.UseSoapEndpoint<DemoService>("/DemoService",
-                                             new Endpoint("/text", MessageType.Text),
-                                             new Endpoint("/gzip", MessageType.BinaryGZip),
-                                             new Endpoint("/deflate", MessageType.BinaryDeflate),
-                                             new Endpoint("/binary", MessageType.Binary),
-                                             new Endpoint("/stext", MessageType.StreamText),
-                                             new Endpoint("/sgzip", MessageType.StreamBinaryGZip),
-                                             new Endpoint("/sdeflate", MessageType.StreamBinaryDeflate),
-                                             new Endpoint("/sbinary", MessageType.StreamBinary)
-                                            );
+            app.UseSoapEndpoint<DemoService>(new SoapCoreOptions()
+                                             .SetBasePath("/DemoService")
+                                             .AddEndpoint(new Endpoint("/text", MessageType.Text))
+                                             .AddEndpoint(new Endpoint("/gzip", MessageType.BinaryGZip))
+                                             .AddEndpoint(new Endpoint("/deflate", MessageType.BinaryDeflate))
+                                             .AddEndpoint(new Endpoint("/binary", MessageType.Binary))
+                                             .AddEndpoint(new Endpoint("/stext", MessageType.StreamText))
+                                             .AddEndpoint(new Endpoint("/sgzip", MessageType.StreamBinaryGZip))
+                                             .AddEndpoint(new Endpoint("/sdeflate", MessageType.StreamBinaryDeflate))
+                                             .AddEndpoint(new Endpoint("/sbinary", MessageType.StreamBinary)));
 
             app.UseEndpoints(endpoints =>
             {

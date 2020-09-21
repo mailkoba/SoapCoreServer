@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using SoapCoreServer.BodyWriters;
 using SoapCoreServer.Descriptions;
 using SoapCoreServer.Encoders;
+using SoapCoreServer.Filters;
 using SoapCoreServer.Messages;
 
 namespace SoapCoreServer
@@ -22,27 +23,30 @@ namespace SoapCoreServer
         public SoapEndpointMiddleware(ILogger<SoapEndpointMiddleware> logger,
                                       RequestDelegate requestDelegate,
                                       Type serviceType,
-                                      string basePath,
-                                      Endpoint[] endpoints)
+                                      SoapCoreOptions options)
         {
-            Utils.ValidateBasePath(basePath);
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof (options));
+            }
 
-            if (endpoints == null || endpoints.Length == 0)
+            Utils.ValidateBasePath(options.BasePath);
+
+            if (options.Endpoints == null || options.Endpoints.Count == 0)
             {
                 throw new ArgumentException("Endpoints not set!");
             }
 
             _logger = logger;
             _serviceType = serviceType;
-            _basePath = basePath;
-            _endpoints = endpoints;
+            _options = options;
             _requestDelegate = requestDelegate;
             _serviceDescription = new ServiceDescription(_serviceType);
         }
 
         public async Task Invoke(HttpContext httpContext)
         {
-            if (httpContext.Request.Path.StartsWithSegments(_basePath, StringComparison.InvariantCultureIgnoreCase))
+            if (httpContext.Request.Path.StartsWithSegments(_options.BasePath, StringComparison.InvariantCultureIgnoreCase))
             {
                 httpContext.Request.EnableBuffering();
 
@@ -73,16 +77,15 @@ namespace SoapCoreServer
 
         private readonly ILogger<SoapEndpointMiddleware> _logger;
         private readonly Type _serviceType;
-        private readonly string _basePath;
+        private readonly SoapCoreOptions _options;
         private readonly RequestDelegate _requestDelegate;
         private readonly ServiceDescription _serviceDescription;
-        private readonly Endpoint[] _endpoints;
 
         private async Task ProcessMeta(HttpContext httpContext)
         {
             var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}{httpContext.Request.Path}";
 
-            var bodyWriter = new MetaBodyWriter(_serviceDescription, baseUrl, _endpoints);
+            var bodyWriter = new MetaBodyWriter(_serviceDescription, baseUrl, _options.Endpoints);
             var encoder = EncoderFactory.Create(MessageType.Text, Encoding.UTF8);
 
             var responseMessage = Message.CreateMessage(encoder.MessageVersion, null, bodyWriter);
@@ -96,19 +99,20 @@ namespace SoapCoreServer
         private Endpoint GetEndpoint(HttpContext httpContext)
         {
             var path = httpContext.Request.Path.Value;
-            if (path.Length < _basePath.Length)
+            if (path.Length < _options.BasePath.Length)
             {
                 return null;
             }
 
-            var endpointUrl = path.Substring(_basePath.Length, path.Length - _basePath.Length);
+            var endpointUrl = path.Substring(_options.BasePath.Length, path.Length - _options.BasePath.Length);
             if (string.IsNullOrWhiteSpace(endpointUrl))
             {
                 endpointUrl = "/";
             }
 
-            var endpoint = _endpoints.FirstOrDefault(x => x.Url.Equals(endpointUrl,
-                                                                       StringComparison.InvariantCultureIgnoreCase));
+            var endpoint = _options.Endpoints
+                                   .FirstOrDefault(x => x.Url.Equals(endpointUrl,
+                                                                     StringComparison.InvariantCultureIgnoreCase));
 
             return endpoint;
         }
@@ -180,6 +184,13 @@ namespace SoapCoreServer
 
                 var requestMessage = await ReadMessageAsync(httpContext, messageEncoder);
 
+                var filters = GetFilters(httpContext);
+
+                foreach (var filter in filters)
+                {
+                    await filter.OnRequest(requestMessage);
+                }
+
                 var soapAction = messageType == MessageType.StreamText
                     ? httpContext.Request.Headers[SoapAction].Single().Trim('"')
                     : requestMessage.Headers.Action;
@@ -227,6 +238,11 @@ namespace SoapCoreServer
                 httpContext.Response.Headers[SoapAction] = operation.ReplyAction;
 
                 await WriteMessageAsync(messageEncoder, responseMessage, httpContext);
+
+                foreach (var filter in filters)
+                {
+                    await filter.OnResponse(responseMessage);
+                }
             }
             catch (Exception exception)
             {
@@ -250,6 +266,13 @@ namespace SoapCoreServer
                     CheckContentType(messageEncoder.ContentType, encoding, httpContext.Request.ContentType);
 
                     var requestMessage = await ReadMessageAsync(httpContext, messageEncoder);
+
+                    var filters = GetFilters(httpContext);
+
+                    foreach (var filter in filters)
+                    {
+                        await filter.OnRequest(requestMessage);
+                    }
 
                     var soapAction = messageType == MessageType.Text
                         ? httpContext.Request.Headers[SoapAction].Single().Trim('"')
@@ -284,6 +307,11 @@ namespace SoapCoreServer
                     httpContext.Response.Headers[SoapAction] = operation.ReplyAction;
 
                     await WriteMessageAsync(messageEncoder, responseMessage, httpContext);
+
+                    foreach (var filter in filters)
+                    {
+                        await filter.OnResponse(responseMessage);
+                    }
 
                     return responseMessage;
                 }
@@ -429,6 +457,14 @@ namespace SoapCoreServer
             }
 
             throw new Exception($"Content-Type must be {originalContentType}");
+        }
+
+        private IAsyncFilter[] GetFilters(HttpContext httpContext)
+        {
+            return _options.Filters
+                           .Select(x => httpContext.RequestServices.GetRequiredService(x) as IAsyncFilter)
+                           .Where(x => x != null)
+                           .ToArray();
         }
 
         #endregion private

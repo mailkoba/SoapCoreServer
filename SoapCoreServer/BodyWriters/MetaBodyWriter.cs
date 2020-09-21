@@ -13,7 +13,7 @@ namespace SoapCoreServer.BodyWriters
 {
     internal class MetaBodyWriter : BodyWriter
     {
-        public MetaBodyWriter(ServiceDescription service, string baseUrl, Endpoint[] endpoints)
+        public MetaBodyWriter(ServiceDescription service, string baseUrl, IEnumerable<Endpoint> endpoints)
             : base(isBuffered: true)
         {
             _service = service;
@@ -44,7 +44,7 @@ namespace SoapCoreServer.BodyWriters
 
         private readonly ServiceDescription _service;
         private readonly string _baseUrl;
-        private readonly Endpoint[] _endpoints;
+        private readonly IEnumerable<Endpoint> _endpoints;
 
         private WsdlDesc _wsdlDesc;
         private int _q;

@@ -8,17 +8,14 @@ namespace SoapCoreServer
     public static class SoapEndpointExtensions
     {
         public static IApplicationBuilder UseSoapEndpoint<T>(this IApplicationBuilder builder,
-                                                             string basePath,
-                                                             params Endpoint[] endpoints)
+                                                             SoapCoreOptions options)
         {
-            Utils.ValidateBasePath(basePath);
-
-            if (endpoints == null || endpoints.Length == 0)
+            if (options.Endpoints == null || options.Endpoints.Count == 0)
             {
                 throw new ArgumentException("Endpoints not set!");
             }
 
-            return builder.UseMiddleware<SoapEndpointMiddleware>(typeof (T), basePath, endpoints);
+            return builder.UseMiddleware<SoapEndpointMiddleware>(typeof (T), options);
         }
 
         public static IServiceCollection AddSoapExceptionTransformer(this IServiceCollection serviceCollection,

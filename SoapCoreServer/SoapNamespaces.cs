@@ -18,5 +18,6 @@ namespace SoapCoreServer
         public const string Wsu = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd";
         public const string Xsd = "http://www.w3.org/2001/XMLSchema";
         public const string Msb = "http://schemas.microsoft.com/ws/06/2004/mspolicy/netbinary1";
+        public const string Wss = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd";
     }
 }
