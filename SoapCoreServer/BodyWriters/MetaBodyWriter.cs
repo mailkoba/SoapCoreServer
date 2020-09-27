@@ -657,23 +657,25 @@ namespace SoapCoreServer.BodyWriters
                 writer.WriteAttributeString("name", portInfo.portName);
                 writer.WriteAttributeString("binding", $"tns:{portInfo.portName}");
 
+                var url = new Uri(new Uri(_baseUrl), endpoint.Url).ToString();
+
                 if (endpoint.Type.IsText())
                 {
                     writer.WriteStartElement("soap", "address", SoapNamespaces.Soap);
 
-                    writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}".Replace("//", string.Empty));
+                    writer.WriteAttributeString("location", url);
                     writer.WriteEndElement(); // soap:address
                 }
                 else
                 {
                     writer.WriteStartElement("soap12", "address", SoapNamespaces.Soap12);
 
-                    writer.WriteAttributeString("location", $"{_baseUrl}{endpoint.Url}".Replace("//", string.Empty));
+                    writer.WriteAttributeString("location", url);
                     writer.WriteEndElement(); // soap:address
 
                     writer.WriteStartElement("wsa10", "EndpointReference", SoapNamespaces.Wsa10);
                     writer.WriteStartElement("wsa10", "Address", SoapNamespaces.Wsa10);
-                    writer.WriteString($"{_baseUrl}{endpoint.Url}");
+                    writer.WriteString(url);
                     writer.WriteEndElement(); // wsa10:Address
                     writer.WriteEndElement(); // wsa10:EndpointReference
                 }
