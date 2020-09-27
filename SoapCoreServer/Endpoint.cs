@@ -29,6 +29,8 @@ namespace SoapCoreServer
 
         public string Url { get; }
 
+        public string UnslashedUrl => Url.TrimStart('/');
+
         public MessageType Type { get; }
 
         public Encoding Encoding { get; }

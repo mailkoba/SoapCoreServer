@@ -657,6 +657,12 @@ namespace SoapCoreServer.BodyWriters
                 writer.WriteAttributeString("name", portInfo.portName);
                 writer.WriteAttributeString("binding", $"tns:{portInfo.portName}");
 
+                var baseUrl = _baseUrl;
+                if (!baseUrl.EndsWith('/'))
+                {
+                    baseUrl += "/";
+                }
+
                 var url = new Uri(new Uri(_baseUrl), endpoint.Url).ToString();
 
                 if (endpoint.Type.IsText())
