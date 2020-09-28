@@ -9,7 +9,7 @@ using SoapCoreServer.Filters.WsSecurity;
 
 namespace SoapCoreServer.Filters
 {
-    internal class WsSecurityFilter : IAsyncFilter
+    public class WsSecurityFilter : IAsyncFilter
     {
         public WsSecurityFilter(Func<string, Task<string>> funcGetUserPassword)
         {
