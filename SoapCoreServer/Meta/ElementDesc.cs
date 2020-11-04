@@ -11,7 +11,11 @@ namespace SoapCoreServer.Meta
         {
         }
 
-        public static ElementDesc CreateRoot(SchemaDesc schema, string name, string ns, Type type, OperationMemberDescription[] members)
+        public static ElementDesc CreateRoot(SchemaDesc schema,
+                                             string name,
+                                             string ns,
+                                             Type type,
+                                             OperationMemberDescription[] members)
         {
             var elem = new ElementDesc
             {
@@ -24,6 +28,7 @@ namespace SoapCoreServer.Meta
             };
 
             var children = members.Select(x => Create(schema, x)).ToArray();
+
             elem.SetChildren(children);
 
             return elem;
@@ -46,7 +51,7 @@ namespace SoapCoreServer.Meta
                 Ns = ns,
                 Type = Utils.GetUnderlyingType(type),
                 Children = new ElementDesc[] { },
-                TypeName = typeName ?? GetTypeName(filteredType),
+                TypeName = typeName ?? GetTypeName(filteredType, schema.WsdlDesc.SoapSerializer),
                 Required = required,
                 Nullable = nullable,
                 EmitDefaultValue = emitDefaultValue
@@ -105,7 +110,7 @@ namespace SoapCoreServer.Meta
         private static ElementDesc Create(SchemaDesc schema, OperationMemberDescription member)
         {
             var filteredType = Utils.GetFilteredPropertyType(member.Type);
-            var ns = member.Ns ?? Utils.GetNsByType(member.Type);
+            var ns = member.Ns ?? Utils.GetNsByType(member.Type, schema.WsdlDesc.SoapSerializer);
             return new ElementDesc
             {
                 Schema = schema.WsdlDesc.GetSchema(ns),
@@ -113,17 +118,17 @@ namespace SoapCoreServer.Meta
                 Type = Utils.GetUnderlyingType(member.Type),
                 Ns = ns,
                 Children = new ElementDesc[] {},
-                TypeName = GetTypeName(filteredType),
+                TypeName = GetTypeName(filteredType, schema.WsdlDesc.SoapSerializer),
                 NotWriteInComplexType = member.Header,
                 IsStreamed = member.Type == typeof (Stream)
             };
         }
 
-        private static string GetTypeName((Type type, bool isArray) typeInfo)
+        private static string GetTypeName((Type type, bool isArray) typeInfo, SoapSerializerType soapSerializer)
         {
             if (typeInfo.type == typeof (Stream)) return "StreamBody";
 
-            var name = Utils.GetTypeNameByContract(typeInfo.type);
+            var name = Utils.GetTypeNameByContract(typeInfo.type, soapSerializer);
             return typeInfo.isArray
                        ? $"ArrayOf{name.Replace("[]", string.Empty)}"
                        : name;

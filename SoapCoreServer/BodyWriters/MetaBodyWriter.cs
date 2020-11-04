@@ -55,7 +55,7 @@ namespace SoapCoreServer.BodyWriters
 
         private void CreateSchemas()
         {
-            _wsdlDesc = new WsdlDesc();
+            _wsdlDesc = new WsdlDesc(_service.SoapSerializer);
             var contractsByNs = _service.ContractDescriptions
                                         .GroupBy(x => x.Namespace);
 
@@ -116,14 +116,15 @@ namespace SoapCoreServer.BodyWriters
                     writer.WriteStartElement("GenericType");
                     writer.WriteAttributeString("xmlns", Utils.SerializationNs);
                     writer.WriteAttributeString("Name", attr?.Name ?? propType.type.Name);
-                    writer.WriteAttributeString("Namespace", Utils.GetNsByType(propType.type));
+                    writer.WriteAttributeString("Namespace", Utils.GetNsByType(propType.type,
+                                                                               _service.SoapSerializer));
                     writer.WriteEndElement(); // GenericType
 
                     foreach (var argType in propType.type.GetGenericArguments())
                     {
                         writer.WriteStartElement("GenericParameter");
-                        writer.WriteAttributeString("Name", Utils.GetTypeNameByContract(argType));
-                        writer.WriteAttributeString("Namespace", Utils.GetNsByType(argType));
+                        writer.WriteAttributeString("Name", Utils.GetTypeNameByContract(argType, _service.SoapSerializer));
+                        writer.WriteAttributeString("Namespace", Utils.GetNsByType(argType, _service.SoapSerializer));
                         writer.WriteEndElement(); // GenericParameter
                     }
 
@@ -133,13 +134,13 @@ namespace SoapCoreServer.BodyWriters
 
                 if (inherited)
                 {
-                    var baseTypeNs = Utils.GetNsByType(propType.type.BaseType);
+                    var baseTypeNs = Utils.GetNsByType(propType.type.BaseType, _service.SoapSerializer);
 
                     writer.WriteStartElement("xs", "complexContent", SoapNamespaces.Xsd);
                     writer.WriteAttributeString("mixed", "false");
                     writer.WriteStartElement("xs", "extension", SoapNamespaces.Xsd);
 
-                    var baseTypeName = Utils.GetTypeNameByContract(propType.type.BaseType);
+                    var baseTypeName = Utils.GetTypeNameByContract(propType.type.BaseType, _service.SoapSerializer);
                     string xsTypename;
                     if (baseTypeNs == elem.Ns)
                     {
@@ -291,7 +292,10 @@ namespace SoapCoreServer.BodyWriters
                                 }
                             }
 
-                            writer.WriteAttributeString("nillable", "true");
+                            if (elem.Nullable)
+                            {
+                                writer.WriteAttributeString("nillable", elem.Nullable.ToString().ToLower());
+                            }
                         }
 
                         writer.WriteAttributeString("name", elem.Name);
@@ -407,7 +411,7 @@ namespace SoapCoreServer.BodyWriters
         {
             foreach (var toBuild in schema.Enums)
             {
-                var name = Utils.GetTypeNameByContract(toBuild);
+                var name = Utils.GetTypeNameByContract(toBuild, _service.SoapSerializer);
 
                 writer.WriteStartElement("xs", "simpleType", SoapNamespaces.Xsd);
                 writer.WriteAttributeString("name", name);
@@ -529,7 +533,11 @@ namespace SoapCoreServer.BodyWriters
                 writer.WriteAttributeString("name", operation.Name);
 
                 writer.WriteStartElement("wsdl", "input", SoapNamespaces.Wsdl);
-                writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.SoapAction);
+
+                if (_service.SoapSerializer == SoapSerializerType.DataContractSerializer)
+                {
+                    writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.SoapAction);
+                }
 
                 if (!(operation.IsEmptyRequest || operation.IsStreamRequest))
                 {
@@ -546,7 +554,11 @@ namespace SoapCoreServer.BodyWriters
                 if (!operation.IsOneWay)
                 {
                     writer.WriteStartElement("wsdl", "output", SoapNamespaces.Wsdl);
-                    writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.ReplyAction);
+
+                    if (_service.SoapSerializer == SoapSerializerType.DataContractSerializer)
+                    {
+                        writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.ReplyAction);
+                    }
 
                     if (!operation.IsStreamRequest)
                     {
@@ -587,6 +599,7 @@ namespace SoapCoreServer.BodyWriters
                 }
 
                 writer.WriteStartElement(portInfo.soapPrefix, "binding", portInfo.soapNs);
+                writer.WriteAttributeString("style", "document");
                 writer.WriteAttributeString("transport", TransportSchema);
                 writer.WriteEndElement(); // soap:binding
 
@@ -663,7 +676,7 @@ namespace SoapCoreServer.BodyWriters
                     baseUrl += "/";
                 }
 
-                var url = new Uri(new Uri(baseUrl), endpoint.Url).ToString();
+                var url = new Uri(new Uri(baseUrl), endpoint.UnslashedUrl).ToString();
 
                 if (endpoint.Type.IsText())
                 {

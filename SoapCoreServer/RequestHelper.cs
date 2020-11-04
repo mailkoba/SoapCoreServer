@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.ServiceModel.Channels;
+using System.Xml;
+using System.Xml.Serialization;
 using SoapCoreServer.Descriptions;
 
 namespace SoapCoreServer
@@ -41,8 +43,12 @@ namespace SoapCoreServer
 
                 var index = requestMessage.Headers.FindHeader(header.Name, header.Ns);
                 using var xmlReader = requestMessage.Headers.GetReaderAtHeader(index);
-                var serializer = new DataContractSerializer(header.Type, header.Name, header.Ns);
-                var headerBody = serializer.ReadObject(xmlReader);
+
+                var headerBody = Deserialize(xmlReader,
+                                             operationDescription.ContractDescription.ServiceDescription.SoapSerializer,
+                                             header.Type,
+                                             header.Name,
+                                             header.Ns);
 
                 property.SetValue(request, headerBody);
             }
@@ -52,25 +58,74 @@ namespace SoapCoreServer
                                      OperationDescription operationDescription,
                                      object request)
         {
-            var properties = request.GetType()
-                                    .GetFieldsAndProperties();
-
-            using var xmlReader = requestMessage.GetReaderAtBodyContents();
-            var serializer = new DataContractSerializer(operationDescription.Request.Type,
-                                                        operationDescription.Request.MessageName,
-                                                        operationDescription.ContractDescription.Namespace);
-            var requestBody = serializer.ReadObject(xmlReader);
-
-            foreach (var property in properties)
+            if (operationDescription.Request.IsWrapped)
             {
-                var item = operationDescription.Request
-                                               .Body
-                                               .FirstOrDefault(x => x.Name == property.Name &&
-                                                                    x.Type == property.GetMemberType());
-                if (item == null) continue;
+                using var xmlReader = requestMessage.GetReaderAtBodyContents();
 
-                property.SetValue(request,
-                                  property.GetValue(requestBody));
+                var requestBody = Deserialize(xmlReader,
+                                              operationDescription.ContractDescription
+                                                                  .ServiceDescription
+                                                                  .SoapSerializer,
+                                              operationDescription.Request.Type,
+                                              operationDescription.Request.MessageName,
+                                              operationDescription.ContractDescription.Namespace);
+
+                var properties = operationDescription.Request.Type.GetFieldsAndProperties();
+
+                foreach (var property in properties)
+                {
+                    var item = operationDescription.Request
+                                                   .Body
+                                                   .FirstOrDefault(x => x.Name == property.Name &&
+                                                                        x.Type == property.GetMemberType());
+                    if (item == null) continue;
+
+                    property.SetValue(request,
+                                      property.GetValue(requestBody));
+                }
+            }
+            else
+            {
+                var firstProperty = request.GetType()
+                                           .GetFieldsAndProperties()
+                                           .FirstOrDefault();
+
+                if (firstProperty == null) return;
+
+                using var xmlReader = requestMessage.GetReaderAtBodyContents();
+
+                var requestBody = Deserialize(xmlReader,
+                                              operationDescription.ContractDescription
+                                                                  .ServiceDescription
+                                                                  .SoapSerializer,
+                                              firstProperty.GetMemberType(),
+                                              operationDescription.Request.MessageName,
+                                              operationDescription.ContractDescription.Namespace);
+
+                firstProperty.SetValue(request, requestBody);
+            }
+        }
+
+        private static object Deserialize(XmlDictionaryReader xmlReader,
+                                          SoapSerializerType soapSerializer,
+                                          Type type,
+                                          string messageName,
+                                          string ns)
+        {
+            switch (soapSerializer)
+            {
+                case SoapSerializerType.DataContractSerializer:
+                    var dataContractSerializer = new DataContractSerializer(type, messageName, ns);
+                    return dataContractSerializer.ReadObject(xmlReader);
+                case SoapSerializerType.XmlSerializer:
+                    var xmlSerializer = new XmlSerializer(type,
+                                                          overrides: null,
+                                                          extraTypes: Array.Empty<Type>(),
+                                                          new XmlRootAttribute(messageName),
+                                                          ns);
+                    return xmlSerializer.Deserialize(xmlReader);
+                default:
+                    throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
             }
         }
     }

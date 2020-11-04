@@ -4,9 +4,10 @@ namespace SoapCoreServer.Meta
 {
     internal class WsdlDesc
     {
-        public WsdlDesc()
+        public WsdlDesc(SoapSerializerType soapSerializer)
         {
             _schemas = new Dictionary<string, SchemaDesc>();
+            SoapSerializer = soapSerializer;
         }
 
         public SchemaDesc GetSchema(string ns)
@@ -15,6 +16,8 @@ namespace SoapCoreServer.Meta
         }
 
         public ICollection<string> AllNs => _schemas.Keys;
+
+        public SoapSerializerType SoapSerializer { get; }
 
         private readonly IDictionary<string, SchemaDesc> _schemas;
 

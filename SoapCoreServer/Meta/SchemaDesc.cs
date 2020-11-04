@@ -38,7 +38,6 @@ namespace SoapCoreServer.Meta
                                                 .Distinct()
                                                 .ToArray();
 
-        //todo: не самый лучший способ
         public bool HasSerializationTypes => ComplexTypes.Any(
             x => x.Children
                   .Any(y => y.Type == typeof (Guid) || y.Type == typeof (Guid?)));
@@ -50,7 +49,18 @@ namespace SoapCoreServer.Meta
                                               operation.WrapperNamespace ?? Ns,
                                               operation.Type,
                                               operation.AllMembers);
-            AddElement(elem);
+
+            if (operation.IsWrapped)
+            {
+                AddElement(elem);
+            }
+            else
+            {
+                if (elem.Children.Length > 1)
+                {
+                    throw new Exception($"Wrong IsWrapped attribute value on type {operation.Type.FullName}!");
+                }
+            }
 
             Array.ForEach(elem.Children, ScanElement);
         }
@@ -83,13 +93,13 @@ namespace SoapCoreServer.Meta
 
         private bool ContainsElement(Type type, string ns = null)
         {
-            ns = ns ?? Utils.GetNsByType(type);
+            ns ??= Utils.GetNsByType(type, WsdlDesc.SoapSerializer);
             return WsdlDesc.GetSchema(ns).Elements.Any(x => x.Type == type);
         }
 
         private void AddEnum(Type type, string ns = null)
         {
-            ns = ns ?? Utils.GetNsByType(type);
+            ns ??= Utils.GetNsByType(type, WsdlDesc.SoapSerializer);
             var schema = WsdlDesc.GetSchema(ns);
             if (!schema.Enums.Contains(type))
             {
@@ -99,7 +109,7 @@ namespace SoapCoreServer.Meta
 
         private void AddComplexType(ElementDesc elem)
         {
-            var ns = elem.Ns ?? Utils.GetNsByType(elem.Type);
+            var ns = elem.Ns ?? Utils.GetNsByType(elem.Type, WsdlDesc.SoapSerializer);
             var schema = WsdlDesc.GetSchema(ns);
             if (schema.ComplexTypes.All(x => x.Type != elem.Type))
             {
@@ -109,7 +119,7 @@ namespace SoapCoreServer.Meta
 
         private ElementDesc AddElement(ElementDesc elem)
         {
-            var ns = elem.Ns ?? Utils.GetNsByType(elem.Type);
+            var ns = elem.Ns ?? Utils.GetNsByType(elem.Type, WsdlDesc.SoapSerializer);
             var schema = WsdlDesc.GetSchema(ns);
             if (!schema.Elements.Any(x => x.Type == elem.Type && x.Name == elem.Name))
             {
@@ -140,8 +150,8 @@ namespace SoapCoreServer.Meta
                     var arrayElement = AddElement(ElementDesc.Create(this, elem.TypeName, elem.Ns, elem.Type, elem.TypeName));
                     AddComplexType(arrayElement);
 
-                    var name = Utils.GetTypeNameByContract(type);
-                    var itemElement = ElementDesc.Create(this, name, Utils.GetNsByType(type), type, name);
+                    var name = Utils.GetTypeNameByContract(type, WsdlDesc.SoapSerializer);
+                    var itemElement = ElementDesc.Create(this, name, Utils.GetNsByType(type, WsdlDesc.SoapSerializer), type, name);
                     arrayElement.SetChildren(itemElement);
 
                     if (!ContainsElement(type))
@@ -188,8 +198,8 @@ namespace SoapCoreServer.Meta
                 if (inherited && !ContainsElement(baseType))
                 {
                     var baseElement = ElementDesc.Create(this,
-                                                         Utils.GetTypeNameByContract(baseType),
-                                                         Utils.GetNsByType(baseType),
+                                                         Utils.GetTypeNameByContract(baseType, WsdlDesc.SoapSerializer),
+                                                         Utils.GetNsByType(baseType, WsdlDesc.SoapSerializer),
                                                          baseType);
                     ScanElement(baseElement);
                 }
@@ -200,7 +210,9 @@ namespace SoapCoreServer.Meta
                                      .Where(x => x.DeclaringType == elem.Type)
                                      .Select(x => new
                                      {
-                                         info = Utils.GetDataMemberInfo(x),
+                                         info = WsdlDesc.SoapSerializer == SoapSerializerType.DataContractSerializer
+                                             ? Utils.GetDataMemberInfo(x)
+                                             : Utils.GetXmlElementInfo(x),
                                          name = x.Name,
                                          type = x.GetMemberType()
                                      })
@@ -209,7 +221,7 @@ namespace SoapCoreServer.Meta
                                      .ThenBy(x => x.name)
                                      .Select(x => ElementDesc.Create(this,
                                                                      x.info.Value.name,
-                                                                     Utils.GetNsByType(x.type),
+                                                                     Utils.GetNsByType(x.type, WsdlDesc.SoapSerializer),
                                                                      x.type,
                                                                      required: x.info.Value.required,
                                                                      nullable: x.info.Value.nullable,

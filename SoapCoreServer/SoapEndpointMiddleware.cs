@@ -41,7 +41,7 @@ namespace SoapCoreServer
             _serviceType = serviceType;
             _options = options;
             _requestDelegate = requestDelegate;
-            _serviceDescription = new ServiceDescription(_serviceType);
+            _serviceDescription = new ServiceDescription(_serviceType, options.SerializerType);
         }
 
         public async Task Invoke(HttpContext httpContext)
@@ -128,10 +128,7 @@ namespace SoapCoreServer
             }
             else
             {
-                var bodyWriter = new WrappedBodyWriter(operation.Response.WrapperNamespace ??
-                                                       operation.ContractDescription.Namespace,
-                                                       operation.Response.MessageName,
-                                                       value ?? new object());
+                var bodyWriter = new WrappedBodyWriter(operation.Response, value ?? new object());
 
                 responseMessage = Message.CreateMessage(messageEncoder.MessageVersion, null, bodyWriter);
                 responseMessage = new CustomMessage(responseMessage);

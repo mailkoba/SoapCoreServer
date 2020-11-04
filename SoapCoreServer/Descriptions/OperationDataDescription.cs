@@ -6,36 +6,40 @@ using System.ServiceModel;
 
 namespace SoapCoreServer.Descriptions
 {
-    public class OperationDataDescription
+    internal class OperationDataDescription
     {
-        public static OperationDataDescription Create(ParameterInfo parameter)
+        public static OperationDataDescription Create(ParameterInfo parameter,
+                                                      OperationDescription operation)
         {
             if (parameter.ParameterType == typeof (Stream))
             {
-                return CreateByStream(parameter);
+                return CreateByStream(parameter, operation);
             }
 
-            var desc = CreateByAttribute(parameter.ParameterType);
+            var desc = CreateByAttribute(parameter.ParameterType, operation);
             if (desc != null)
             {
-                desc.MessageName = desc.MessageName ?? parameter.ParameterType.Name;
+                desc.MessageName ??= parameter.ParameterType.Name;
             }
             return desc;
         }
 
-        public static OperationDataDescription Create(Type returnType)
+        public static OperationDataDescription Create(Type returnType,
+                                                      OperationDescription operation)
         {
             var type = returnType.IsValuableTask()
                 ? returnType.GetGenericArguments().First()
                 : returnType;
 
-            var desc = CreateByAttribute(type) ?? new OperationDataDescription();
-            desc.MessageName = desc.MessageName ?? type.Name;
+            var desc = CreateByAttribute(type, operation) ?? new OperationDataDescription();
+            desc.MessageName ??= type.Name;
 
             return desc;
         }
 
-        public static OperationDataDescription CreateEmptyInputMessage(string contractName, string methodName)
+        public static OperationDataDescription CreateEmptyInputMessage(string contractName,
+                                                                       string methodName,
+                                                                       OperationDescription operation)
         {
             return new OperationDataDescription
             {
@@ -45,7 +49,8 @@ namespace SoapCoreServer.Descriptions
             };
         }
 
-        public static OperationDataDescription CreateEmptyOutputMessage(string methodName)
+        public static OperationDataDescription CreateEmptyOutputMessage(string methodName,
+                                                                        OperationDescription operation)
         {
             return new OperationDataDescription
             {
@@ -55,11 +60,13 @@ namespace SoapCoreServer.Descriptions
             };
         }
 
+        public OperationDescription Operation { get; private set; }
+
         public Type Type { get; private set; }
 
         public string WrapperNamespace { get; private set; }
 
-        public bool IsWrapped { get; private set; }
+        public bool IsWrapped { get; private set; } = true;
 
         public OperationMemberDescription[] Body { get; private set; }
 
@@ -67,9 +74,16 @@ namespace SoapCoreServer.Descriptions
 
         public OperationMemberDescription[] AllMembers => Headers.Union(Body).ToArray();
 
-        public string MessageName { get; private set; }
+        public string MessageName
+        {
+            get => IsWrapped ? _messageName : AllMembers.Single().Name;
+            private set => _messageName = value;
+        }
 
-        private static OperationDataDescription CreateByAttribute(Type type)
+        private string _messageName;
+
+        private static OperationDataDescription CreateByAttribute(Type type,
+                                                                  OperationDescription operation)
         {
             if (!(type.GetCustomAttribute(typeof (MessageContractAttribute)) is MessageContractAttribute attr))
             {
@@ -80,6 +94,7 @@ namespace SoapCoreServer.Descriptions
 
             return new OperationDataDescription
             {
+                Operation = operation,
                 MessageName = attr.WrapperName,
                 WrapperNamespace = attr.WrapperNamespace,
                 IsWrapped = attr.IsWrapped,
@@ -89,10 +104,12 @@ namespace SoapCoreServer.Descriptions
             };
         }
 
-        private static OperationDataDescription CreateByStream(ParameterInfo parameter)
+        private static OperationDataDescription CreateByStream(ParameterInfo parameter,
+                                                               OperationDescription operation)
         {
             return new OperationDataDescription
             {
+                Operation = operation,
                 MessageName = parameter.Name,
                 WrapperNamespace = null,
                 Body = GetMessageBody(null),
@@ -103,10 +120,13 @@ namespace SoapCoreServer.Descriptions
 
         private static OperationMemberDescription[] GetMessageBody(MemberInfo[] properties)
         {
-            if (properties == null || properties.Length == 0) return new OperationMemberDescription[] {};
+            if (properties == null || properties.Length == 0)
+            {
+                return Array.Empty<OperationMemberDescription>();
+            }
 
             var infos = GetAttributesInfo<MessageBodyMemberAttribute>(properties);
-            if (infos.Length == 0) return new OperationMemberDescription[] { };
+            if (infos.Length == 0) return Array.Empty<OperationMemberDescription>();
 
             return infos
                    .OrderBy(x => x.attr.Order)
@@ -120,10 +140,13 @@ namespace SoapCoreServer.Descriptions
 
         private static OperationMemberDescription[] GetMessageHeaders(MemberInfo[] properties)
         {
-            if (properties == null || properties.Length == 0) return new OperationMemberDescription[] { };
+            if (properties == null || properties.Length == 0)
+            {
+                return Array.Empty<OperationMemberDescription>();
+            }
 
             var infos = GetAttributesInfo<MessageHeaderAttribute>(properties);
-            if (infos.Length == 0) return new OperationMemberDescription[] { };
+            if (infos.Length == 0) return Array.Empty<OperationMemberDescription>();
 
             return infos.Select(x => new OperationMemberDescription(type: x.prop.GetMemberType(),
                                                                     name: x.attr.Name ?? x.prop.Name,

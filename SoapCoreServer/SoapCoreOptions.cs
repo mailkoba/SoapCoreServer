@@ -8,6 +8,8 @@ namespace SoapCoreServer
     {
         public string BasePath { get; private set; }
 
+        public SoapSerializerType SerializerType { get; private set; } = SoapSerializerType.DataContractSerializer;
+
         public IReadOnlyCollection<Endpoint> Endpoints => _endpoints;
 
         public IReadOnlyCollection<Type> Filters => _filters;
@@ -16,6 +18,13 @@ namespace SoapCoreServer
         {
             Utils.ValidateBasePath(basePath);
             BasePath = basePath;
+
+            return this;
+        }
+
+        public SoapCoreOptions SetSoapSerializer(SoapSerializerType serializerType)
+        {
+            SerializerType = serializerType;
 
             return this;
         }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Xml;
+using System.Xml.Serialization;
 
 namespace SoapCoreServer
 {
@@ -14,11 +15,40 @@ namespace SoapCoreServer
         {
             var attr = prop.GetCustomAttribute<DataMemberAttribute>();
             if (attr == null) return null;
-            return (name: attr.Name ?? prop.Name,
+
+            return (name: string.IsNullOrWhiteSpace(attr.Name) ? prop.Name : attr.Name,
                     required: attr.IsRequired,
                     order: attr.Order,
                     nullable: Nullable.GetUnderlyingType(prop.GetMemberType()) != null,
                     emitDefaultValue: attr.EmitDefaultValue);
+        }
+
+        public static (string name, bool required, int order, bool nullable, bool emitDefaultValue)? GetXmlElementInfo(
+            MemberInfo prop)
+        {
+            var info = GetFilteredPropertyType(prop.GetMemberType());
+            if (info.isArray)
+            {
+                var attrArray = prop.GetCustomAttribute<XmlArrayAttribute>();
+                if (attrArray != null)
+                {
+                    return (name: string.IsNullOrWhiteSpace(attrArray.ElementName) ? prop.Name : attrArray.ElementName,
+                            required: false,
+                            order: attrArray.Order,
+                            nullable: attrArray.IsNullable,
+                            emitDefaultValue: true);
+                }
+            }
+
+            var attr = prop.GetCustomAttribute<XmlElementAttribute>();
+            if (attr == null) return null;
+
+            return (name: string.IsNullOrWhiteSpace(attr.ElementName) ? prop.Name : attr.ElementName,
+                    required: false,
+                    order: attr.Order,
+                    nullable: attr.IsNullable,
+                    emitDefaultValue: true);
+
         }
 
         public static (Type type, bool isArray) GetFilteredPropertyType(Type type)
@@ -103,34 +133,97 @@ namespace SoapCoreServer
             throw new ArgumentException($".NET type {typeName} cannot be resolved into XML schema type!");
         }
 
-        public static string GetTypeNameByContract(Type type)
+        public static string GetTypeNameByContract(Type type, SoapSerializerType soapSerializer)
         {
             var filteredType = GetFilteredPropertyType(type);
-            var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
-
-            var name = attr?.Name;
-            if (name != null && type.IsGenericType)
+            string name;
+            switch (soapSerializer)
             {
-                var generic = type.GetTypeInfo()
-                                  .GetGenericArguments()
-                                  .Select(GetTypeNameByContract)
-                                  .ToArray();
-                name = string.Format(name, generic);
+                case SoapSerializerType.DataContractSerializer:
+                {
+                    var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
+
+                    name = attr?.Name;
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        if (type.IsGenericType)
+                        {
+                            var generic = type.GetTypeInfo()
+                                              .GetGenericArguments()
+                                              .Select(x => GetTypeNameByContract(x, soapSerializer))
+                                              .ToArray();
+                            name = string.Format(name, generic);
+                        }
+                    }
+
+                    break;
+                }
+                case SoapSerializerType.XmlSerializer:
+                {
+                    var attr = filteredType.type.GetCustomAttribute<XmlTypeAttribute>();
+
+                    name = attr?.TypeName;
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        if (type.IsGenericType)
+                        {
+                            var generic = type.GetTypeInfo()
+                                              .GetGenericArguments()
+                                              .Select(x => GetTypeNameByContract(x, soapSerializer))
+                                              .ToArray();
+                            name = string.Format(name, generic);
+                        }
+                    }
+
+                    break;
+                }
+                default:
+                    throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
             }
 
-            return name ?? (filteredType.type == typeof (string) ? "string" : filteredType.type.Name);
+            return string.IsNullOrWhiteSpace(name)
+                ? (filteredType.type == typeof (string) ? "string" : filteredType.type.Name)
+                : name;
         }
 
-        public static string GetNsByType(Type type)
+        public static string GetNsByType(Type type, SoapSerializerType soapSerializer)
         {
             if (type == typeof (Stream)) return StreamNs;
 
             var filteredType = GetFilteredPropertyType(type);
-            var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
 
-            return attr?.Namespace ?? (type == typeof (string[])
-                                           ? SerializationArraysNs
-                                           : $"{DataContractNs}/{filteredType.type.Namespace}");
+            switch (soapSerializer)
+            {
+                case SoapSerializerType.DataContractSerializer:
+                {
+                    var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
+
+                    return attr?.Namespace ?? (type == typeof (string[])
+                        ? SerializationArraysNs
+                        : $"{DataContractNs}/{filteredType.type.Namespace}");
+                }
+                case SoapSerializerType.XmlSerializer:
+                {
+                    if (filteredType.isArray)
+                    {
+                        var attrArrayItem = type.GetCustomAttribute<XmlArrayItemAttribute>();
+                        if (attrArrayItem != null)
+                        {
+                            return attrArrayItem?.Namespace ?? (type == typeof (string[])
+                                ? SerializationArraysNs
+                                : filteredType.type.Namespace);
+                        }
+                    }
+
+                    var attr = filteredType.type.GetCustomAttribute<XmlTypeAttribute>();
+
+                    return attr?.Namespace ?? (type == typeof (string[])
+                        ? SerializationArraysNs
+                        : filteredType.type.Namespace);
+                }
+                default:
+                    throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
+            }
         }
 
         public static void ValidateBasePath(string basePath)

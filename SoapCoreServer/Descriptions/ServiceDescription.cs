@@ -8,8 +8,10 @@ namespace SoapCoreServer.Descriptions
 {
     internal class ServiceDescription
     {
-        public ServiceDescription(Type serviceType)
+        public ServiceDescription(Type serviceType, SoapSerializerType soapSerializer)
         {
+            SoapSerializer = soapSerializer;
+
             var contractDescriptions = new List<ContractDescription>();
             var interfaces = serviceType.GetInterfaces();
 
@@ -27,6 +29,9 @@ namespace SoapCoreServer.Descriptions
         }
 
         public Type ServiceType { get; }
+
+        public SoapSerializerType SoapSerializer { get; }
+
         public IReadOnlyList<ContractDescription> ContractDescriptions { get; }
 
         public IEnumerable<OperationDescription> OperationDescriptions =>

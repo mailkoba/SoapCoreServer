@@ -49,12 +49,13 @@ namespace SoapCoreServer.Descriptions
             var methodParameters = DispatchMethod.GetParameters();
             if (methodParameters.Length > 1)
             {
-                throw new Exception($"Method {ContractDescription.Name}.{DispatchMethod.Name} contains more then one parameter!");
+                throw new Exception(
+                    $"Method {ContractDescription.Name}.{DispatchMethod.Name} contains more then one parameter!");
             }
 
             return methodParameters.Length == 0
-                       ? OperationDataDescription.CreateEmptyInputMessage(ContractDescription.Name, Name)
-                       : OperationDataDescription.Create(methodParameters[0]);
+                ? OperationDataDescription.CreateEmptyInputMessage(ContractDescription.Name, Name, this)
+                : OperationDataDescription.Create(methodParameters[0], this);
         }
 
         private OperationDataDescription CreateResponse()
@@ -64,16 +65,17 @@ namespace SoapCoreServer.Descriptions
             if (returnType.IsVoid() || returnType.IsTask())
             {
                 return IsOneWay
-                           ? null
-                           : OperationDataDescription.CreateEmptyOutputMessage(DispatchMethod.Name);
+                    ? null
+                    : OperationDataDescription.CreateEmptyOutputMessage(DispatchMethod.Name, this);
             }
 
             if (IsOneWay)
             {
-                throw new Exception($"Method {ContractDescription.Name}.{DispatchMethod.Name} marked as IsOneWay=true!");
+                throw new Exception(
+                    $"Method {ContractDescription.Name}.{DispatchMethod.Name} marked as IsOneWay=true!");
             }
 
-            return OperationDataDescription.Create(returnType);
+            return OperationDataDescription.Create(returnType, this);
         }
     }
 }
