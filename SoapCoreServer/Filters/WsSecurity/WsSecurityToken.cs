@@ -4,7 +4,7 @@ using System.Xml.Serialization;
 namespace SoapCoreServer.Filters.WsSecurity
 {
     [XmlRoot("UsernameToken", Namespace = SoapNamespaces.Wss)]
-    internal class WsSecurityToken
+    public class WsSecurityToken
     {
         [XmlAttribute("Id")]
         public string Id { get; set; }
