@@ -38,6 +38,7 @@ namespace SoapCoreServer.Meta
                                          string name,
                                          string ns,
                                          Type type,
+                                         ArrayType arrayType,
                                          string typeName = null,
                                          bool required = false,
                                          bool nullable = false,
@@ -51,10 +52,13 @@ namespace SoapCoreServer.Meta
                 Ns = ns,
                 Type = Utils.GetUnderlyingType(type),
                 Children = new ElementDesc[] { },
-                TypeName = typeName ?? GetTypeName(filteredType, schema.WsdlDesc.SoapSerializer),
+                TypeName = typeName ?? GetTypeName(filteredType,
+                                                   schema.WsdlDesc.SoapSerializer,
+                                                   arrayType),
                 Required = required,
                 Nullable = nullable,
-                EmitDefaultValue = emitDefaultValue
+                EmitDefaultValue = emitDefaultValue,
+                ArrayType = arrayType
             };
         }
 
@@ -78,7 +82,7 @@ namespace SoapCoreServer.Meta
 
         public ElementDesc Clone()
         {
-            return Create(Schema, Name, Ns, Type, TypeName, Required, Nullable, EmitDefaultValue);
+            return Create(Schema, Name, Ns, Type, ArrayType, TypeName, Required, Nullable, EmitDefaultValue);
         }
 
         public SchemaDesc Schema { get; private set; }
@@ -107,31 +111,48 @@ namespace SoapCoreServer.Meta
 
         public bool EmitDefaultValue { get; private set; } = true;
 
+        public ArrayType ArrayType { get; private set; } = ArrayType.None;
+
         private static ElementDesc Create(SchemaDesc schema, OperationMemberDescription member)
         {
             var filteredType = Utils.GetFilteredPropertyType(member.Type);
             var ns = member.Ns ?? Utils.GetNsByType(member.Type, schema.WsdlDesc.SoapSerializer);
+
             return new ElementDesc
             {
                 Schema = schema.WsdlDesc.GetSchema(ns),
                 Name = member.Name,
                 Type = Utils.GetUnderlyingType(member.Type),
                 Ns = ns,
-                Children = new ElementDesc[] {},
-                TypeName = GetTypeName(filteredType, schema.WsdlDesc.SoapSerializer),
+                Children = new ElementDesc[] { },
+                TypeName = GetTypeName(filteredType,
+                                       schema.WsdlDesc.SoapSerializer,
+                                       member.ArrayType),
                 NotWriteInComplexType = member.Header,
-                IsStreamed = member.Type == typeof (Stream)
+                IsStreamed = member.Type == typeof(Stream),
+                ArrayType = member.ArrayType
             };
         }
 
-        private static string GetTypeName((Type type, bool isArray) typeInfo, SoapSerializerType soapSerializer)
+        private static string GetTypeName((Type type, bool isArray) typeInfo,
+                                          SoapSerializerType soapSerializer,
+                                          ArrayType arrayType)
         {
-            if (typeInfo.type == typeof (Stream)) return "StreamBody";
+            if (typeInfo.type == typeof(Stream)) return "StreamBody";
 
-            var name = Utils.GetTypeNameByContract(typeInfo.type, soapSerializer);
-            return typeInfo.isArray
-                       ? $"ArrayOf{name.Replace("[]", string.Empty)}"
-                       : name;
+            var name = Utils.GetTypeName(typeInfo.type, soapSerializer);
+
+            switch (arrayType)
+            {
+                case ArrayType.None:
+                    return name;
+                case ArrayType.InPlace:
+                    return name;
+                case ArrayType.Separated:
+                    return $"ArrayOf{name.Replace("[]", string.Empty)}";
+                default:
+                    throw new Exception($"Unknown ArrayType '{arrayType}'!");
+            }
         }
     }
 }

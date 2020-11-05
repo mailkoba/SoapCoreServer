@@ -38,7 +38,7 @@ namespace SoapCoreServer.Descriptions
 
         public bool IsEmptyRequest => Request?.Type == null;
 
-        public bool IsStreamRequest => !IsEmptyRequest && Request?.Type == typeof (Stream);
+        public bool IsStreamRequest => !IsEmptyRequest && Request?.Type == typeof(Stream);
 
         public OperationDataDescription Request { get; }
 

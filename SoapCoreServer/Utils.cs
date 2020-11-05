@@ -6,25 +6,63 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Xml;
 using System.Xml.Serialization;
+using SoapCoreServer.Meta;
 
 namespace SoapCoreServer
 {
     internal static class Utils
     {
-        public static (string name, bool required, int order, bool nullable, bool emitDefaultValue)? GetDataMemberInfo(MemberInfo prop)
+        public class ElementInfo
+        {
+            public string Name { get; set; }
+
+            public bool Required { get; set; }
+
+            public int Order { get; set; }
+
+            public bool Nullable { get; set; }
+
+            public bool EmitDefaultValue { get; set; }
+
+            public ArrayType ArrayType { get; set; }
+        }
+
+        public static ElementInfo GetMemberInfo(MemberInfo prop, SoapSerializerType soapSerializer)
+        {
+            switch (soapSerializer)
+            {
+                case SoapSerializerType.DataContractSerializer:
+                    return GetDataMemberInfo(prop);
+                case SoapSerializerType.XmlSerializer:
+                    return GetXmlElementInfo(prop);
+                default:
+                    throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
+            }
+        }
+
+        public static ElementInfo GetDataMemberInfo(MemberInfo prop)
         {
             var attr = prop.GetCustomAttribute<DataMemberAttribute>();
             if (attr == null) return null;
 
-            return (name: string.IsNullOrWhiteSpace(attr.Name) ? prop.Name : attr.Name,
-                    required: attr.IsRequired,
-                    order: attr.Order,
-                    nullable: Nullable.GetUnderlyingType(prop.GetMemberType()) != null,
-                    emitDefaultValue: attr.EmitDefaultValue);
+            var memberType = prop.GetMemberType();
+            var info = GetFilteredPropertyType(memberType);
+
+            var nullable = Nullable.GetUnderlyingType(memberType) != null ||
+                           (!info.type.IsValueType && !attr.IsRequired);
+
+            return new ElementInfo
+            {
+                Name = string.IsNullOrWhiteSpace(attr.Name) ? prop.Name : attr.Name,
+                Required = attr.IsRequired,
+                Order = attr.Order,
+                Nullable = nullable,
+                EmitDefaultValue = attr.EmitDefaultValue,
+                ArrayType = info.isArray ? ArrayType.Separated : ArrayType.None
+            };
         }
 
-        public static (string name, bool required, int order, bool nullable, bool emitDefaultValue)? GetXmlElementInfo(
-            MemberInfo prop)
+        public static ElementInfo GetXmlElementInfo(MemberInfo prop)
         {
             var info = GetFilteredPropertyType(prop.GetMemberType());
             if (info.isArray)
@@ -32,34 +70,41 @@ namespace SoapCoreServer
                 var attrArray = prop.GetCustomAttribute<XmlArrayAttribute>();
                 if (attrArray != null)
                 {
-                    return (name: string.IsNullOrWhiteSpace(attrArray.ElementName) ? prop.Name : attrArray.ElementName,
-                            required: false,
-                            order: attrArray.Order,
-                            nullable: attrArray.IsNullable,
-                            emitDefaultValue: true);
+                    return new ElementInfo
+                    {
+                        Name = string.IsNullOrWhiteSpace(attrArray.ElementName) ? prop.Name : attrArray.ElementName,
+                        Required = false,
+                        Order = attrArray.Order,
+                        Nullable = attrArray.IsNullable,
+                        EmitDefaultValue = true,
+                        ArrayType = ArrayType.Separated
+                    };
                 }
             }
 
             var attr = prop.GetCustomAttribute<XmlElementAttribute>();
             if (attr == null) return null;
 
-            return (name: string.IsNullOrWhiteSpace(attr.ElementName) ? prop.Name : attr.ElementName,
-                    required: false,
-                    order: attr.Order,
-                    nullable: attr.IsNullable,
-                    emitDefaultValue: true);
-
+            return new ElementInfo
+            {
+                Name = string.IsNullOrWhiteSpace(attr.ElementName) ? prop.Name : attr.ElementName,
+                Required = false,
+                Order = attr.Order,
+                Nullable = attr.IsNullable,
+                EmitDefaultValue = true,
+                ArrayType = info.isArray ? ArrayType.InPlace : ArrayType.None
+            };
         }
 
         public static (Type type, bool isArray) GetFilteredPropertyType(Type type)
         {
-            if (type == typeof (Stream))
+            if (type == typeof(Stream))
             {
                 return (type, isArray: false);
             }
 
             type = GetUnderlyingType(type);
-            if (type == typeof (string))
+            if (type == typeof(string))
             {
                 return (type, isArray: false);
             }
@@ -70,7 +115,7 @@ namespace SoapCoreServer
                 return (type: elementType, isArray: true);
             }
 
-            if (typeof (IEnumerable).IsAssignableFrom(type))
+            if (typeof(IEnumerable).IsAssignableFrom(type))
             {
                 // Recursively look through the base class to find the Generic Type of the Enumerable
                 var baseType = type;
@@ -81,7 +126,7 @@ namespace SoapCoreServer
                     baseTypeInfo = baseType.GetTypeInfo();
                 }
 
-                var generic = baseType.GetTypeInfo().GetGenericArguments().DefaultIfEmpty(typeof (object))
+                var generic = baseType.GetTypeInfo().GetGenericArguments().DefaultIfEmpty(typeof(object))
                                       .FirstOrDefault();
                 return (type: generic, isArray: true);
             }
@@ -133,94 +178,94 @@ namespace SoapCoreServer
             throw new ArgumentException($".NET type {typeName} cannot be resolved into XML schema type!");
         }
 
-        public static string GetTypeNameByContract(Type type, SoapSerializerType soapSerializer)
+        public static string GetTypeName(Type type, SoapSerializerType soapSerializer)
         {
             var filteredType = GetFilteredPropertyType(type);
             string name;
             switch (soapSerializer)
             {
                 case SoapSerializerType.DataContractSerializer:
-                {
-                    var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
-
-                    name = attr?.Name;
-                    if (!string.IsNullOrWhiteSpace(name))
                     {
-                        if (type.IsGenericType)
-                        {
-                            var generic = type.GetTypeInfo()
-                                              .GetGenericArguments()
-                                              .Select(x => GetTypeNameByContract(x, soapSerializer))
-                                              .ToArray();
-                            name = string.Format(name, generic);
-                        }
-                    }
+                        var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
 
-                    break;
-                }
+                        name = attr?.Name;
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            if (type.IsGenericType)
+                            {
+                                var generic = type.GetTypeInfo()
+                                                  .GetGenericArguments()
+                                                  .Select(x => GetTypeName(x, soapSerializer))
+                                                  .ToArray();
+                                name = string.Format(name, generic);
+                            }
+                        }
+
+                        break;
+                    }
                 case SoapSerializerType.XmlSerializer:
-                {
-                    var attr = filteredType.type.GetCustomAttribute<XmlTypeAttribute>();
-
-                    name = attr?.TypeName;
-                    if (!string.IsNullOrWhiteSpace(name))
                     {
-                        if (type.IsGenericType)
-                        {
-                            var generic = type.GetTypeInfo()
-                                              .GetGenericArguments()
-                                              .Select(x => GetTypeNameByContract(x, soapSerializer))
-                                              .ToArray();
-                            name = string.Format(name, generic);
-                        }
-                    }
+                        var attr = filteredType.type.GetCustomAttribute<XmlTypeAttribute>();
 
-                    break;
-                }
+                        name = attr?.TypeName;
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            if (type.IsGenericType)
+                            {
+                                var generic = type.GetTypeInfo()
+                                                  .GetGenericArguments()
+                                                  .Select(x => GetTypeName(x, soapSerializer))
+                                                  .ToArray();
+                                name = string.Format(name, generic);
+                            }
+                        }
+
+                        break;
+                    }
                 default:
                     throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
             }
 
             return string.IsNullOrWhiteSpace(name)
-                ? (filteredType.type == typeof (string) ? "string" : filteredType.type.Name)
+                ? (filteredType.type == typeof(string) ? "string" : filteredType.type.Name)
                 : name;
         }
 
         public static string GetNsByType(Type type, SoapSerializerType soapSerializer)
         {
-            if (type == typeof (Stream)) return StreamNs;
+            if (type == typeof(Stream)) return StreamNs;
 
             var filteredType = GetFilteredPropertyType(type);
 
             switch (soapSerializer)
             {
                 case SoapSerializerType.DataContractSerializer:
-                {
-                    var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
-
-                    return attr?.Namespace ?? (type == typeof (string[])
-                        ? SerializationArraysNs
-                        : $"{DataContractNs}/{filteredType.type.Namespace}");
-                }
-                case SoapSerializerType.XmlSerializer:
-                {
-                    if (filteredType.isArray)
                     {
-                        var attrArrayItem = type.GetCustomAttribute<XmlArrayItemAttribute>();
-                        if (attrArrayItem != null)
-                        {
-                            return attrArrayItem?.Namespace ?? (type == typeof (string[])
-                                ? SerializationArraysNs
-                                : filteredType.type.Namespace);
-                        }
+                        var attr = filteredType.type.GetCustomAttribute<DataContractAttribute>();
+
+                        return attr?.Namespace ?? (type == typeof(string[])
+                            ? SerializationArraysNs
+                            : $"{DataContractNs}/{filteredType.type.Namespace}");
                     }
+                case SoapSerializerType.XmlSerializer:
+                    {
+                        if (filteredType.isArray)
+                        {
+                            var attrArrayItem = type.GetCustomAttribute<XmlArrayItemAttribute>();
+                            if (attrArrayItem != null)
+                            {
+                                return attrArrayItem?.Namespace ?? (type == typeof(string[])
+                                    ? SerializationArraysNs
+                                    : filteredType.type.Namespace);
+                            }
+                        }
 
-                    var attr = filteredType.type.GetCustomAttribute<XmlTypeAttribute>();
+                        var attr = filteredType.type.GetCustomAttribute<XmlTypeAttribute>();
 
-                    return attr?.Namespace ?? (type == typeof (string[])
-                        ? SerializationArraysNs
-                        : filteredType.type.Namespace);
-                }
+                        return attr?.Namespace ?? (type == typeof(string[])
+                            ? SerializationArraysNs
+                            : filteredType.type.Namespace);
+                    }
                 default:
                     throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
             }

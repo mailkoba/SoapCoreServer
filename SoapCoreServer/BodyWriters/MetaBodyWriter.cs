@@ -103,7 +103,7 @@ namespace SoapCoreServer.BodyWriters
                 inherited = !propType.isArray &&
                             !elem.IsStreamed &&
                             propType.type.BaseType != null &&
-                            elem.Type.BaseType != typeof (object);
+                            elem.Type.BaseType != typeof(object);
 
                 // GenericType
                 if (propType.type.IsGenericType)
@@ -123,7 +123,7 @@ namespace SoapCoreServer.BodyWriters
                     foreach (var argType in propType.type.GetGenericArguments())
                     {
                         writer.WriteStartElement("GenericParameter");
-                        writer.WriteAttributeString("Name", Utils.GetTypeNameByContract(argType, _service.SoapSerializer));
+                        writer.WriteAttributeString("Name", Utils.GetTypeName(argType, _service.SoapSerializer));
                         writer.WriteAttributeString("Namespace", Utils.GetNsByType(argType, _service.SoapSerializer));
                         writer.WriteEndElement(); // GenericParameter
                     }
@@ -140,7 +140,7 @@ namespace SoapCoreServer.BodyWriters
                     writer.WriteAttributeString("mixed", "false");
                     writer.WriteStartElement("xs", "extension", SoapNamespaces.Xsd);
 
-                    var baseTypeName = Utils.GetTypeNameByContract(propType.type.BaseType, _service.SoapSerializer);
+                    var baseTypeName = Utils.GetTypeName(propType.type.BaseType, _service.SoapSerializer);
                     string xsTypename;
                     if (baseTypeNs == elem.Ns)
                     {
@@ -264,11 +264,16 @@ namespace SoapCoreServer.BodyWriters
                         writer.WriteAttributeString("nillable", "true");
                         writer.WriteAttributeString("type", "xs:base64Binary");
                     }
-                    else if (elem.Type.IsArray)
+                    else if (elem.ArrayType != ArrayType.None)
                     {
                         if (elem.Parent != null)
                         {
                             writer.WriteAttributeString("minOccurs", "0");
+                        }
+
+                        if (elem.ArrayType == ArrayType.InPlace)
+                        {
+                            writer.WriteAttributeString("maxOccurs", "unbounded");
                         }
 
                         writer.WriteAttributeString("name", elem.Name);
@@ -286,15 +291,17 @@ namespace SoapCoreServer.BodyWriters
                                     writer.WriteAttributeString("minOccurs", "0");
                                 }
 
-                                if (elem.Parent.Type.IsArray)
+                                if (elem.Parent.ArrayType != ArrayType.None)
                                 {
                                     writer.WriteAttributeString("maxOccurs", "unbounded");
                                 }
                             }
 
-                            if (elem.Nullable)
+                            if (elem.Schema.WsdlDesc.SoapSerializer == SoapSerializerType.DataContractSerializer
+                                ? !elem.Required
+                                : elem.Nullable)
                             {
-                                writer.WriteAttributeString("nillable", elem.Nullable.ToString().ToLower());
+                                writer.WriteAttributeString("nillable", "true");
                             }
                         }
 
@@ -375,7 +382,7 @@ namespace SoapCoreServer.BodyWriters
                     importNs.Add(Utils.SerializationNs);
                 }
 
-                if (schema.Elements.Any(x => x.Type == typeof (Stream)))
+                if (schema.Elements.Any(x => x.Type == typeof(Stream)))
                 {
                     importNs.Add(Utils.StreamNs);
                 }
@@ -411,7 +418,7 @@ namespace SoapCoreServer.BodyWriters
         {
             foreach (var toBuild in schema.Enums)
             {
-                var name = Utils.GetTypeNameByContract(toBuild, _service.SoapSerializer);
+                var name = Utils.GetTypeName(toBuild, _service.SoapSerializer);
 
                 writer.WriteStartElement("xs", "simpleType", SoapNamespaces.Xsd);
                 writer.WriteAttributeString("name", name);
@@ -424,14 +431,14 @@ namespace SoapCoreServer.BodyWriters
                     writer.WriteStartElement("xs", "enumeration", SoapNamespaces.Xsd);
                     writer.WriteAttributeString("value", value.ToString());
 
-                    if ((int) value != iEnum)
+                    if ((int)value != iEnum)
                     {
                         writer.WriteStartElement("xs", "annotation", SoapNamespaces.Xsd);
                         writer.WriteStartElement("xs", "appinfo", SoapNamespaces.Xsd);
 
                         writer.WriteStartElement("EnumerationValue");
                         writer.WriteAttributeString("xmlns", Utils.SerializationNs);
-                        writer.WriteValue((int) value);
+                        writer.WriteValue((int)value);
                         writer.WriteEndElement(); // EnumerationValue
 
                         writer.WriteEndElement(); // xs:appinfo

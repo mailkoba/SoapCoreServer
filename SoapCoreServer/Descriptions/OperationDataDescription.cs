@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.ServiceModel;
+using SoapCoreServer.Meta;
 
 namespace SoapCoreServer.Descriptions
 {
@@ -11,7 +12,7 @@ namespace SoapCoreServer.Descriptions
         public static OperationDataDescription Create(ParameterInfo parameter,
                                                       OperationDescription operation)
         {
-            if (parameter.ParameterType == typeof (Stream))
+            if (parameter.ParameterType == typeof(Stream))
             {
                 return CreateByStream(parameter, operation);
             }
@@ -85,7 +86,7 @@ namespace SoapCoreServer.Descriptions
         private static OperationDataDescription CreateByAttribute(Type type,
                                                                   OperationDescription operation)
         {
-            if (!(type.GetCustomAttribute(typeof (MessageContractAttribute)) is MessageContractAttribute attr))
+            if (!(type.GetCustomAttribute(typeof(MessageContractAttribute)) is MessageContractAttribute attr))
             {
                 return null;
             }
@@ -98,7 +99,7 @@ namespace SoapCoreServer.Descriptions
                 MessageName = attr.WrapperName,
                 WrapperNamespace = attr.WrapperNamespace,
                 IsWrapped = attr.IsWrapped,
-                Body = GetMessageBody(properties),
+                Body = GetMessageBody(properties, operation),
                 Headers = GetMessageHeaders(properties),
                 Type = type
             };
@@ -112,13 +113,14 @@ namespace SoapCoreServer.Descriptions
                 Operation = operation,
                 MessageName = parameter.Name,
                 WrapperNamespace = null,
-                Body = GetMessageBody(null),
+                Body = GetMessageBody(null, operation),
                 Headers = GetMessageHeaders(null),
                 Type = parameter.ParameterType
             };
         }
 
-        private static OperationMemberDescription[] GetMessageBody(MemberInfo[] properties)
+        private static OperationMemberDescription[] GetMessageBody(MemberInfo[] properties,
+                                                                   OperationDescription operation)
         {
             if (properties == null || properties.Length == 0)
             {
@@ -131,10 +133,20 @@ namespace SoapCoreServer.Descriptions
             return infos
                    .OrderBy(x => x.attr.Order)
                    .ThenBy(x => x.attr.Name ?? x.prop.Name)
-                   .Select(info => new OperationMemberDescription(type: info.prop.GetMemberType(),
-                                                                  name: info.attr.Name ?? info.prop.Name,
-                                                                  ns: info.attr.Namespace,
-                                                                  order: info.attr.Order))
+                   .Select(info =>
+                   {
+                       var arrayType = Utils.GetMemberInfo(info.prop,
+                                                           operation.ContractDescription.ServiceDescription
+                                                                    .SoapSerializer)
+                                            ?.ArrayType ?? ArrayType.None;
+
+                       return new OperationMemberDescription(
+                           type: info.prop.GetMemberType(),
+                           name: info.attr.Name ?? info.prop.Name,
+                           ns: info.attr.Namespace,
+                           order: info.attr.Order,
+                           arrayType: arrayType);
+                   })
                    .ToArray();
         }
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using SoapCoreServer.Meta;
 
 namespace SoapCoreServer.Descriptions
 {
@@ -10,7 +11,8 @@ namespace SoapCoreServer.Descriptions
                                           int? order = null,
                                           bool header = false,
                                           bool isNullable = false,
-                                          string dataType = null)
+                                          string dataType = null,
+                                          ArrayType arrayType = ArrayType.None)
         {
             Type = type;
             Name = name;
@@ -19,6 +21,7 @@ namespace SoapCoreServer.Descriptions
             Header = header;
             IsNullable = isNullable;
             DataType = dataType;
+            ArrayType = arrayType;
         }
 
         public bool Header { get; }
@@ -34,5 +37,7 @@ namespace SoapCoreServer.Descriptions
         public bool IsNullable { get; }
 
         public string DataType { get; }
+
+        public ArrayType ArrayType { get; }
     }
 }

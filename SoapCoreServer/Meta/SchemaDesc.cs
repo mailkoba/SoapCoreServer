@@ -15,7 +15,7 @@ namespace SoapCoreServer.Meta
             }
 
             Ns = ns;
-            WsdlDesc = wsdlDesc ?? throw new ArgumentNullException(nameof (wsdlDesc));
+            WsdlDesc = wsdlDesc ?? throw new ArgumentNullException(nameof(wsdlDesc));
 
             Elements = new List<ElementDesc>();
             Enums = new List<Type>();
@@ -40,7 +40,7 @@ namespace SoapCoreServer.Meta
 
         public bool HasSerializationTypes => ComplexTypes.Any(
             x => x.Children
-                  .Any(y => y.Type == typeof (Guid) || y.Type == typeof (Guid?)));
+                  .Any(y => y.Type == typeof(Guid) || y.Type == typeof(Guid?)));
 
         public void AddMethod(OperationDataDescription operation)
         {
@@ -71,7 +71,7 @@ namespace SoapCoreServer.Meta
                                               operation.Name,
                                               operation.ContractDescription.Namespace,
                                               operation.Request.Type,
-                                              new []
+                                              new[]
                                               {
                                                   new OperationMemberDescription(operation.Request.Type,
                                                                                  operation.Request.MessageName,
@@ -132,11 +132,11 @@ namespace SoapCoreServer.Meta
         {
             if (ContainsElement(elem.Type)) return;
 
-            if (elem.Type.IsValueType || elem.Type == typeof (string))
+            if (elem.Type.IsValueType || elem.Type == typeof(string))
             {
                 if (elem.Type.IsEnum)
                 {
-                    AddElement(ElementDesc.Create(this, elem.TypeName, elem.Ns, elem.Type, nullable: elem.Nullable));
+                    AddElement(ElementDesc.Create(this, elem.TypeName, elem.Ns, elem.Type, elem.ArrayType, nullable: elem.Nullable));
                     AddEnum(elem.Type, elem.Ns);
                 }
             }
@@ -147,11 +147,22 @@ namespace SoapCoreServer.Meta
                 {
                     if (type == typeof(byte)) return;
 
-                    var arrayElement = AddElement(ElementDesc.Create(this, elem.TypeName, elem.Ns, elem.Type, elem.TypeName));
-                    AddComplexType(arrayElement);
+                    var arrayElement = AddElement(
+                        ElementDesc.Create(this, elem.TypeName, elem.Ns, elem.Type, elem.ArrayType, elem.TypeName));
 
-                    var name = Utils.GetTypeNameByContract(type, WsdlDesc.SoapSerializer);
-                    var itemElement = ElementDesc.Create(this, name, Utils.GetNsByType(type, WsdlDesc.SoapSerializer), type, name);
+                    if (elem.ArrayType == ArrayType.Separated)
+                    {
+                        AddComplexType(arrayElement);
+                    }
+
+                    var name = Utils.GetTypeName(type, WsdlDesc.SoapSerializer);
+                    var itemElement = ElementDesc.Create(this,
+                                                         name,
+                                                         Utils.GetNsByType(type, WsdlDesc.SoapSerializer),
+                                                         type,
+                                                         ArrayType.None,
+                                                         name);
+
                     arrayElement.SetChildren(itemElement);
 
                     if (!ContainsElement(type))
@@ -162,6 +173,7 @@ namespace SoapCoreServer.Meta
                                                              itemElement.TypeName,
                                                              itemElement.Ns,
                                                              itemElement.Type,
+                                                             itemElement.ArrayType,
                                                              itemElement.TypeName);
                             //AddComplexType(element);
                             ScanElement(element);
@@ -176,31 +188,27 @@ namespace SoapCoreServer.Meta
                     return;
                 }
 
-                if (IsComplexType(type))// && !ContainsElement(elem))
+                if (IsComplexType(type))
                 {
                     if (elem.Name != elem.TypeName)
                     {
-                        // имя поля отличается от типа элемента
-                        elem = ElementDesc.Create(this, elem.TypeName, elem.Ns, type, elem.TypeName);
+                        elem = ElementDesc.Create(this, elem.TypeName, elem.Ns, type, elem.ArrayType, elem.TypeName);
                     }
-                    else
-                    {
-                        // имя поля совпадает с типом элемента, нужна копия исходного элемента
-                        //elem = elem.Clone();
-                    }
+
                     AddElement(elem.Clone());
                     AddComplexType(elem);
                 }
 
                 var baseType = Utils.GetFilteredPropertyType(elem.Type).type.BaseType;
-                var inherited = baseType != null && baseType != typeof (object);
+                var inherited = baseType != null && baseType != typeof(object);
 
                 if (inherited && !ContainsElement(baseType))
                 {
                     var baseElement = ElementDesc.Create(this,
-                                                         Utils.GetTypeNameByContract(baseType, WsdlDesc.SoapSerializer),
+                                                         Utils.GetTypeName(baseType, WsdlDesc.SoapSerializer),
                                                          Utils.GetNsByType(baseType, WsdlDesc.SoapSerializer),
-                                                         baseType);
+                                                         baseType,
+                                                         ArrayType.None);
                     ScanElement(baseElement);
                 }
 
@@ -210,22 +218,24 @@ namespace SoapCoreServer.Meta
                                      .Where(x => x.DeclaringType == elem.Type)
                                      .Select(x => new
                                      {
-                                         info = WsdlDesc.SoapSerializer == SoapSerializerType.DataContractSerializer
-                                             ? Utils.GetDataMemberInfo(x)
-                                             : Utils.GetXmlElementInfo(x),
-                                         name = x.Name,
-                                         type = x.GetMemberType()
+                                         Info = Utils.GetMemberInfo(x, WsdlDesc.SoapSerializer),
+                                         Name = x.Name,
+                                         Type = x.GetMemberType()
                                      })
-                                     .Where(x => x.info.HasValue)
-                                     .OrderBy(x => x.info.Value.order)
-                                     .ThenBy(x => x.name)
-                                     .Select(x => ElementDesc.Create(this,
-                                                                     x.info.Value.name,
-                                                                     Utils.GetNsByType(x.type, WsdlDesc.SoapSerializer),
-                                                                     x.type,
-                                                                     required: x.info.Value.required,
-                                                                     nullable: x.info.Value.nullable,
-                                                                     emitDefaultValue: x.info.Value.emitDefaultValue))
+                                     .Where(x => x.Info != null)
+                                     .OrderBy(x => x.Info.Order)
+                                     .ThenBy(x => x.Name)
+                                     .Select(x =>
+                                     {
+                                         return ElementDesc.Create(this,
+                                                                   x.Info.Name,
+                                                                   Utils.GetNsByType(x.Type, WsdlDesc.SoapSerializer),
+                                                                   x.Type,
+                                                                   x.Info.ArrayType,
+                                                                   required: x.Info.Required,
+                                                                   nullable: x.Info.Nullable,
+                                                                   emitDefaultValue: x.Info.EmitDefaultValue);
+                                     })
                                      .ToArray();
 
                 elem.SetChildren(properties);
