@@ -249,22 +249,14 @@ namespace SoapCoreServer
                     }
                 case SoapSerializerType.XmlSerializer:
                     {
-                        if (filteredType.isArray)
+                        if (filteredType.isArray && XsdTypes.Contains(filteredType.type))
                         {
-                            var attrArrayItem = type.GetCustomAttribute<XmlArrayItemAttribute>();
-                            if (attrArrayItem != null)
-                            {
-                                return attrArrayItem?.Namespace ?? (type == typeof(string[])
-                                    ? SerializationArraysNs
-                                    : filteredType.type.Namespace);
-                            }
+                            return SoapNamespaces.Xsd;
                         }
 
                         var attr = filteredType.type.GetCustomAttribute<XmlTypeAttribute>();
 
-                        return attr?.Namespace ?? (type == typeof(string[])
-                            ? SerializationArraysNs
-                            : filteredType.type.Namespace);
+                        return attr?.Namespace ?? filteredType.type.Namespace;
                     }
                 default:
                     throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
@@ -420,6 +412,12 @@ namespace SoapCoreServer
         {
             "anyType", "anyURI", "base64Binary", "boolean", "byte", "dateTime", "decimal", "double", "float",
             "int", "long", "QName", "short", "string", "unsignedByte", "unsignedInt", "unsignedLong", "unsignedShort"
+        };
+
+        private static readonly Type[] XsdTypes =
+        {
+            typeof (bool), typeof (byte), typeof (DateTime), typeof (decimal), typeof (double), typeof (float),
+            typeof (int), typeof (long), typeof (short), typeof (string), typeof (uint), typeof (ulong), typeof (ushort)
         };
     }
 }
