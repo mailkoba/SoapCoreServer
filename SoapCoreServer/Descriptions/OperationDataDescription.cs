@@ -46,7 +46,8 @@ namespace SoapCoreServer.Descriptions
             {
                 MessageName = $"{contractName}_{methodName}_InputMessage",
                 Body = new OperationMemberDescription[] { },
-                Headers = new OperationMemberDescription[] { }
+                Headers = new OperationMemberDescription[] { },
+                Operation = operation
             };
         }
 
@@ -57,7 +58,8 @@ namespace SoapCoreServer.Descriptions
             {
                 MessageName = $"{methodName}Response",
                 Body = new OperationMemberDescription[] { },
-                Headers = new OperationMemberDescription[] { }
+                Headers = new OperationMemberDescription[] { },
+                Operation = operation
             };
         }
 
