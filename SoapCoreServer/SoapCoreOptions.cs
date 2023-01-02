@@ -49,7 +49,7 @@ namespace SoapCoreServer
             return this;
         }
 
-        private readonly List<Endpoint> _endpoints = new List<Endpoint>();
-        private readonly List<Type> _filters = new List<Type>();
+        private readonly List<Endpoint> _endpoints = new();
+        private readonly List<Type> _filters = new();
     }
 }

@@ -14,7 +14,7 @@ namespace SoapCoreServer.Filters
         public WsSecurityFilter(Func<string, Task<string>> funcGetUserPassword,
                                 Action<WsSecurityToken> actionAuthenticationFailed = null)
         {
-            _funcGetUserPassword = funcGetUserPassword ?? throw new ArgumentNullException(nameof(funcGetUserPassword));
+            _funcGetUserPassword = funcGetUserPassword ?? throw new ArgumentNullException(nameof (funcGetUserPassword));
             _actionAuthenticationFailed = actionAuthenticationFailed;
         }
 
@@ -71,8 +71,13 @@ namespace SoapCoreServer.Filters
             Array.Copy(created, 0, operand, nonce.Length, created.Length);
             Array.Copy(password, 0, operand, nonce.Length + created.Length, password.Length);
 
-            var sha1Hasher = new SHA1CryptoServiceProvider();
-            var hashedDataBytes = sha1Hasher.ComputeHash(operand);
+#if NETCORE_21 || NETCORE_31
+            var hashedDataBytes = SHA1.Create().ComputeHash(operand);
+#endif
+
+#if NET_60_OR_GREATER
+            var hashedDataBytes = SHA1.HashData(operand);
+#endif
 
             return Convert.ToBase64String(hashedDataBytes);
         }
@@ -89,7 +94,7 @@ namespace SoapCoreServer.Filters
                     using var reader = message.Headers.GetReaderAtHeader(i);
                     reader.Read();
 
-                    var serializer = new XmlSerializer(typeof(WsSecurityToken));
+                    var serializer = new XmlSerializer(typeof (WsSecurityToken));
                     wsSecurityToken = (WsSecurityToken)serializer.Deserialize(reader);
 
                     break;

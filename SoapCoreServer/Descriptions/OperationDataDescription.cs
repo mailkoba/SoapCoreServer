@@ -79,7 +79,7 @@ namespace SoapCoreServer.Descriptions
 
         public string MessageName
         {
-            get => IsWrapped ? _messageName : AllMembers.Single().Name;
+            get => IsWrapped ? _messageName : Body.Single().Name;
             private set => _messageName = value;
         }
 

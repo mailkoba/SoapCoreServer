@@ -64,7 +64,7 @@ namespace SoapCoreServer.BodyWriters
                 var schema = _wsdlDesc.GetSchema(contractGroup.Key);
                 foreach (var contract in contractGroup)
                 {
-                    // перечень методов
+                    // methods list
                     foreach (var operation in contract.OperationDescriptions)
                     {
                         if (operation.IsStreamRequest)

@@ -1,9 +1,10 @@
 ﻿using System;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
+using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.Xml;
-using System.Xml.Serialization;
 using SoapCoreServer.Descriptions;
 
 namespace SoapCoreServer.BodyWriters
@@ -22,17 +23,26 @@ namespace SoapCoreServer.BodyWriters
         {
             if (_operation.IsWrapped)
             {
-                xmlWriter.WriteStartElement(_operation.MessageName,
-                                            _operation.Operation.ContractDescription.Namespace);
+                var ns = _operation.WrapperNamespace ?? _operation.Operation.ContractDescription.Namespace;
+                xmlWriter.WriteStartElement(_operation.MessageName, ns);
             }
 
             var props = _body.GetType()
-                             .GetFieldsAndProperties();
+                             .GetFieldsAndProperties()
+                             .Select(x => new
+                              {
+                                  Name = x.GetCustomAttribute<MessageBodyMemberAttribute>()?.Name ?? x.Name,
+                                  Property = x
+                              });
 
-            foreach (var prop in props)
+            foreach (var prop in props.Where(x => _operation.Body.Any(b => b.Name == x.Name)))
             {
-                var value = prop.GetValue(_body);
-                Write(prop, xmlWriter, value);
+                var value = prop.Property.GetValue(_body);
+                Write(prop.Property,
+                      xmlWriter,
+                      prop.Name,
+                      value,
+                      _operation.Operation.ContractDescription.ServiceDescription.SoapSerializer);
             }
 
             if (_operation.IsWrapped)
@@ -44,24 +54,37 @@ namespace SoapCoreServer.BodyWriters
         private readonly OperationDataDescription _operation;
         private readonly object _body;
 
-        private void Write(MemberInfo prop, XmlDictionaryWriter xmlWriter, object value)
+        private void Write(MemberInfo prop,
+                           XmlDictionaryWriter xmlWriter,
+                           string name,
+                           object value,
+                           SoapSerializerType soapSerializer)
         {
-            switch (_operation.Operation.ContractDescription.ServiceDescription.SoapSerializer)
+            if (value != null &&
+                value.GetType().GetCustomAttribute<DataContractAttribute>() == null)
+            {
+                soapSerializer = SoapSerializerType.XmlSerializer;
+            }
+
+            switch (soapSerializer)
             {
                 case SoapSerializerType.DataContractSerializer:
-                    var dataContractSerializer = new DataContractSerializer(prop.GetMemberType(),
-                                                                            prop.Name,
-                                                                            _operation.Operation.ContractDescription
-                                                                                .Namespace);
+                    var dataContractSerializer = new DataContractSerializer(
+                        prop.GetMemberType(),
+                        name,
+                        _operation.WrapperNamespace ?? _operation.Operation.ContractDescription.Namespace,
+                        new[]
+                        {
+                            typeof (System.Text.Json.JsonElement)
+                        });
 
                     dataContractSerializer.WriteObject(xmlWriter, value);
                     break;
                 case SoapSerializerType.XmlSerializer:
-                    var xmlSerializer = new XmlSerializer(prop.GetMemberType(),
-                                                          overrides: null,
-                                                          extraTypes: Array.Empty<Type>(),
-                                                          new XmlRootAttribute(prop.Name),
-                                                          _operation.Operation.ContractDescription.Namespace);
+                    var xmlSerializer = XmlSerializersCache.GetSerializer(
+                        prop.GetMemberType(),
+                        name,
+                        _operation.Operation.ContractDescription.Namespace);
                     xmlSerializer.Serialize(xmlWriter, value);
                     break;
                 default:

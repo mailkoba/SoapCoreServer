@@ -221,7 +221,7 @@ namespace SoapCoreServer
                 else
                 {
                     arguments = operation.IsEmptyRequest
-                        ? new object[0]
+                        ? Array.Empty<object>()
                         : RequestHelper.GetRequestArguments(requestMessage, operation);
                 }
 
@@ -291,7 +291,7 @@ namespace SoapCoreServer
                                                      .GetRequiredService(_serviceDescription.ServiceType);
 
                     var arguments = operation.IsEmptyRequest
-                        ? new object[0]
+                        ? Array.Empty<object>()
                         : RequestHelper.GetRequestArguments(requestMessage, operation);
 
                     var responseObject = await RunMethod(operation, serviceInstance, arguments);
@@ -407,7 +407,7 @@ namespace SoapCoreServer
                                               httpContext.Request.ContentType);
         }
 #endif
-#if NETCORE_30
+#if NETCORE_31 || NET_60_OR_GREATER
         private static Task WriteMessageAsync(IMessageEncoder messageEncoder,
                                               Message responseMessage,
                                               HttpContext httpContext)
