@@ -12,7 +12,12 @@ namespace SoapCoreServer.Meta
 
         public SchemaDesc GetSchema(string ns)
         {
-            return _schemas.ContainsKey(ns) ? _schemas[ns] : CreateSchema(ns);
+            if (!_schemas.TryGetValue(ns, out var schema))
+            {
+                schema = CreateSchema(ns);
+            }
+
+            return schema;
         }
 
         public ICollection<string> AllNs => _schemas.Keys;

@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -45,6 +45,7 @@ namespace SoapCoreServer.BodyWriters
         private readonly ServiceDescription _service;
         private readonly string _baseUrl;
         private readonly IEnumerable<Endpoint> _endpoints;
+        private static readonly ConcurrentDictionary<string, WsdlDesc> Schemas = new();
 
         private WsdlDesc _wsdlDesc;
         private int _q;
@@ -55,6 +56,10 @@ namespace SoapCoreServer.BodyWriters
 
         private void CreateSchemas()
         {
+            var key = $"{_service.ServiceType.FullName}_{_baseUrl}";
+
+            if (Schemas.TryGetValue(key, out _wsdlDesc)) return;
+
             _wsdlDesc = new WsdlDesc(_service.SoapSerializer);
             var contractsByNs = _service.ContractDescriptions
                                         .GroupBy(x => x.Namespace);
@@ -86,6 +91,8 @@ namespace SoapCoreServer.BodyWriters
                     }
                 }
             }
+
+            Schemas.TryAdd(key, _wsdlDesc);
         }
 
         private void WriteComplexType(XmlDictionaryWriter writer, ElementDesc elem)
@@ -93,7 +100,7 @@ namespace SoapCoreServer.BodyWriters
             writer.WriteStartElement("xs", "complexType", SoapNamespaces.Xsd);
             if (!elem.Root)
             {
-                writer.WriteAttributeString("name", elem.Name);
+                writer.WriteAttributeString("name", elem.TypeName);
             }
 
             var inherited = false;
@@ -103,12 +110,12 @@ namespace SoapCoreServer.BodyWriters
                 inherited = !propType.isArray &&
                             !elem.IsStreamed &&
                             propType.type.BaseType != null &&
-                            elem.Type.BaseType != typeof(object);
+                            elem.Type.BaseType != Utils.ObjectType;
 
                 // GenericType
                 if (propType.type.IsGenericType)
                 {
-                    var attr = elem.Type.GetCustomAttribute<DataContractAttribute>();
+                    var attr = elem.Type.GetCustomAttribute<DataContractAttribute>(); //????
 
                     writer.WriteStartElement("xs", "annotation", SoapNamespaces.Xsd);
                     writer.WriteStartElement("xs", "appinfo", SoapNamespaces.Xsd);
@@ -134,7 +141,7 @@ namespace SoapCoreServer.BodyWriters
 
                 if (inherited)
                 {
-                    var baseTypeNs = Utils.GetNsByType(propType.type.BaseType, _service.SoapSerializer);
+                    var baseTypeNs = Utils.GetNsByType(propType.type.BaseType, _service.SoapSerializer, elem.Ns);
 
                     writer.WriteStartElement("xs", "complexContent", SoapNamespaces.Xsd);
                     writer.WriteAttributeString("mixed", "false");
@@ -142,7 +149,7 @@ namespace SoapCoreServer.BodyWriters
 
                     var baseTypeName = Utils.GetTypeName(propType.type.BaseType, _service.SoapSerializer);
                     string xsTypename;
-                    if (baseTypeNs == elem.Ns)
+                    if (baseTypeNs.Equals(elem.Ns))
                     {
                         xsTypename = "tns:" + baseTypeName;
                     }
@@ -156,15 +163,35 @@ namespace SoapCoreServer.BodyWriters
                 }
             }
 
-            writer.WriteStartElement("xs", "sequence", SoapNamespaces.Xsd);
-
-            foreach (var childElem in elem.Children
-                                          .Where(x => !x.NotWriteInComplexType))
+            if (elem.Children.Any(x => !x.NotWriteInComplexType))
             {
-                WriteElement(writer, childElem);
-            }
+                writer.WriteStartElement("xs", "sequence", SoapNamespaces.Xsd);
 
-            writer.WriteEndElement(); // xs:sequence
+                foreach (var childElem in elem.Children
+                                              .Where(x => !x.NotWriteInComplexType))
+                {
+                    if (childElem.IsChoice)
+                    {
+                        writer.WriteStartElement("xs", "choice", SoapNamespaces.Xsd);
+                        writer.WriteAttributeString("minOccurs", childElem.ArrayType == ArrayType.None ? "1" : "0");
+                        writer.WriteAttributeString("maxOccurs",
+                                                    childElem.ArrayType == ArrayType.InPlace ? "unbounded" : "1");
+
+                        foreach (var choiceItem in childElem.Children)
+                        {
+                            WriteElement(writer, choiceItem);
+                        }
+
+                        writer.WriteEndElement(); // xs:choice
+                    }
+                    else
+                    {
+                        WriteElement(writer, childElem);
+                    }
+                }
+
+                writer.WriteEndElement(); // xs:sequence
+            }
 
             if (inherited)
             {
@@ -187,9 +214,9 @@ namespace SoapCoreServer.BodyWriters
             else
             {
                 var typeInfo = elem.Type.GetTypeInfo();
+
                 if (typeInfo.IsValueType)
                 {
-                    writer.WriteAttributeString("name", elem.Name);
                     if (typeInfo.IsEnum)
                     {
                         if (elem.Parent == null)
@@ -217,68 +244,117 @@ namespace SoapCoreServer.BodyWriters
                             }
                         }
 
+                        writer.WriteAttributeString("name", elem.Name);
+
                         WriteElementType(writer, elem);
                     }
                     else
                     {
-                        string xsTypename;
                         if (elem.Nullable)
                         {
-                            xsTypename = Utils.ResolveType(elem.Type);
                             writer.WriteAttributeString("minOccurs", "0");
                             writer.WriteAttributeString("nillable", "true");
                         }
                         else
                         {
-                            if (!elem.Required)
-                            {
-                                writer.WriteAttributeString("minOccurs", "0");
-                            }
-
-                            xsTypename = Utils.ResolveType(elem.Type);
+                            writer.WriteAttributeString("minOccurs", elem.Required ? "1" : "0");
                         }
+
+                        if (elem.ArrayType == ArrayType.None)
+                        {
+                            writer.WriteAttributeString("maxOccurs", "1");
+                        }
+
+                        writer.WriteAttributeString("name", elem.Name);
+
+                        var xsTypename = string.IsNullOrWhiteSpace(elem.DataType)
+                            ? Utils.ResolveType(elem.Type)
+                            : $"xs:{elem.DataType}";
 
                         writer.WriteAttributeString("type", xsTypename);
                     }
                 }
                 else
                 {
-                    if (elem.Type.Name == "String" || elem.Type.Name == "String&")
+                    if (elem.Type.Name is "String" or "String&")
                     {
                         if (!elem.Required)
                         {
                             writer.WriteAttributeString("minOccurs", "0");
                         }
+
                         if (elem.Parent != null && elem.Parent.Type.IsArray)
                         {
                             writer.WriteAttributeString("maxOccurs", "unbounded");
                         }
+                        else
+                        {
+                            writer.WriteAttributeString("maxOccurs", "1");
+                        }
 
                         writer.WriteAttributeString("name", elem.Name);
-                        writer.WriteAttributeString("nillable", "true");
-                        writer.WriteAttributeString("type", "xs:string");
+                        if (elem.Nullable)
+                        {
+                            writer.WriteAttributeString("nillable", "true");
+                        }
+
+                        writer.WriteAttributeString("type", $"xs:{elem.DataType ?? "string"}");
                     }
                     else if (elem.Type.Name == "Byte[]")
                     {
+                        writer.WriteAttributeString("minOccurs", elem.Required ? "1" : "0");
+                        writer.WriteAttributeString("maxOccurs", "1");
+
+                        if (elem.Nullable)
+                        {
+                            writer.WriteAttributeString("nillable", "true");
+                        }
+
                         writer.WriteAttributeString("name", elem.Name);
-                        writer.WriteAttributeString("nillable", "true");
-                        writer.WriteAttributeString("type", "xs:base64Binary");
+
+                        writer.WriteAttributeString("type", $"xs:{elem.DataType ?? "base64Binary"}");
                     }
                     else if (elem.ArrayType != ArrayType.None)
                     {
                         if (elem.Parent != null)
                         {
                             writer.WriteAttributeString("minOccurs", "0");
-                        }
 
-                        if (elem.ArrayType == ArrayType.InPlace)
-                        {
-                            writer.WriteAttributeString("maxOccurs", "unbounded");
+                            if (elem.ArrayType == ArrayType.InPlace)
+                            {
+                                writer.WriteAttributeString("maxOccurs", "unbounded");
+                            }
+                            else if (elem.ArrayType == ArrayType.Separated && !elem.Required)
+                            {
+                                writer.WriteAttributeString("maxOccurs", "1");
+                            }
+
+                            if (elem.Nullable)
+                            {
+                                writer.WriteAttributeString("nillable", "true");
+                            }
                         }
 
                         writer.WriteAttributeString("name", elem.Name);
-                        writer.WriteAttributeString("nillable", "true");
+
                         WriteElementType(writer, elem);
+                    }
+                    else if (elem.Parent is { IsChoice: true })
+                    {
+                        writer.WriteAttributeString("minOccurs", "0");
+                        writer.WriteAttributeString("maxOccurs", "1");
+
+                        if (elem.Name.Equals(elem.TypeName) ||
+                            elem.Parent.Children.Any(x => x.Name.Equals(elem.Name) && !x.Ns.Equals(elem.Ns)))
+                        {
+                            WriteElementRef(writer, elem);
+                        }
+                        else
+                        {
+                            writer.WriteAttributeString("name", elem.Name);
+
+                            WriteElementType(writer, elem);
+                        }
                     }
                     else
                     {
@@ -291,17 +367,21 @@ namespace SoapCoreServer.BodyWriters
                                     writer.WriteAttributeString("minOccurs", "0");
                                 }
 
-                                if (elem.Parent.ArrayType != ArrayType.None)
+                                if (elem.Parent.ArrayType == ArrayType.None)
+                                {
+                                    writer.WriteAttributeString("maxOccurs", "1");
+                                }
+                                else
                                 {
                                     writer.WriteAttributeString("maxOccurs", "unbounded");
                                 }
-                            }
 
-                            if (elem.Schema.WsdlDesc.SoapSerializer == SoapSerializerType.DataContractSerializer
-                                ? !elem.Required
-                                : elem.Nullable)
-                            {
-                                writer.WriteAttributeString("nillable", "true");
+                                if (elem.Schema.WsdlDesc.SoapSerializer == SoapSerializerType.DataContractSerializer
+                                        ? !elem.Required
+                                        : elem.Nullable)
+                                {
+                                    writer.WriteAttributeString("nillable", "true");
+                                }
                             }
                         }
 
@@ -311,19 +391,19 @@ namespace SoapCoreServer.BodyWriters
                 }
             }
 
-            if (!elem.EmitDefaultValue)
-            {
-                writer.WriteStartElement("xs", "annotation", SoapNamespaces.Xsd);
-                writer.WriteStartElement("xs", "appinfo", SoapNamespaces.Xsd);
+            //if (!elem.EmitDefaultValue)
+            //{
+            //    writer.WriteStartElement("xs", "annotation", SoapNamespaces.Xsd);
+            //    writer.WriteStartElement("xs", "appinfo", SoapNamespaces.Xsd);
 
-                writer.WriteStartElement("DefaultValue");
-                writer.WriteAttributeString("xmlns", Utils.SerializationNs);
-                writer.WriteAttributeString("DefaultValue", "false");
-                writer.WriteEndElement(); // EnumerationValue
+            //    writer.WriteStartElement("DefaultValue");
+            //    writer.WriteAttributeString("xmlns", Utils.SerializationNs);
+            //    writer.WriteAttributeString("DefaultValue", "false");
+            //    writer.WriteEndElement(); // EnumerationValue
 
-                writer.WriteEndElement(); // xs:appinfo
-                writer.WriteEndElement(); // xs:annotation
-            }
+            //    writer.WriteEndElement(); // xs:appinfo
+            //    writer.WriteEndElement(); // xs:annotation
+            //}
 
             writer.WriteEndElement(); // xs:element
         }
@@ -342,6 +422,22 @@ namespace SoapCoreServer.BodyWriters
             }
 
             writer.WriteAttributeString("type", xsTypename);
+        }
+
+        private void WriteElementRef(XmlDictionaryWriter writer, ElementDesc elem)
+        {
+            string xsTypename;
+            if (elem.Parent == null || elem.Parent.Ns == elem.Ns)
+            {
+                xsTypename = $"tns:{elem.Name}";
+            }
+            else
+            {
+                writer.WriteAttributeString($"xmlns:q{++_q}", elem.Ns);
+                xsTypename = $"q{_q}:{elem.Name}";
+            }
+
+            writer.WriteAttributeString("ref", xsTypename);
         }
 
         private void WriteTypes(XmlDictionaryWriter writer)
@@ -382,26 +478,26 @@ namespace SoapCoreServer.BodyWriters
                     importNs.Add(Utils.SerializationNs);
                 }
 
-                if (schema.Elements.Any(x => x.Type == typeof(Stream)))
+                if (schema.HasStream)
                 {
                     importNs.Add(Utils.StreamNs);
                 }
 
-                foreach (var import in importNs)
+                foreach (var import in importNs.Where(x => !x.Equals(SoapNamespaces.Xsd)))
                 {
                     writer.WriteStartElement("xs", "import", SoapNamespaces.Xsd);
                     writer.WriteAttributeString("namespace", import);
                     writer.WriteEndElement();
                 }
 
-                foreach (var elem in schema.Elements)
+                foreach (var elem in schema.Elements.Values)
                 {
                     WriteElement(writer, elem);
                 }
 
                 foreach (var complexType in schema.ComplexTypes)
                 {
-                    WriteComplexType(writer, complexType);
+                    WriteComplexType(writer, complexType.Value);
                 }
 
                 WriteEnumTypes(writer, schema);
@@ -541,10 +637,7 @@ namespace SoapCoreServer.BodyWriters
 
                 writer.WriteStartElement("wsdl", "input", SoapNamespaces.Wsdl);
 
-                if (_service.SoapSerializer == SoapSerializerType.DataContractSerializer)
-                {
-                    writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.SoapAction);
-                }
+                writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.SoapAction);
 
                 if (!(operation.IsEmptyRequest || operation.IsStreamRequest))
                 {
@@ -562,10 +655,7 @@ namespace SoapCoreServer.BodyWriters
                 {
                     writer.WriteStartElement("wsdl", "output", SoapNamespaces.Wsdl);
 
-                    if (_service.SoapSerializer == SoapSerializerType.DataContractSerializer)
-                    {
-                        writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.ReplyAction);
-                    }
+                    writer.WriteAttributeString("wsaw", "Action", SoapNamespaces.Wsaw, operation.ReplyAction);
 
                     if (!operation.IsStreamRequest)
                     {
@@ -753,14 +843,12 @@ namespace SoapCoreServer.BodyWriters
                         portName:
                         $"BasicHttpBinding_{serviceTypeName}{(_basicBindingCounter > 0 ? _basicBindingCounter.ToString() : string.Empty)}");
             }
-            else
-            {
-                _customBindingCounter++;
-                return (soapPrefix: "soap12",
-                        soapNs: SoapNamespaces.Soap12,
-                        portName:
-                        $"CustomBinding_{serviceTypeName}{(_customBindingCounter > 0 ? _customBindingCounter.ToString() : string.Empty)}");
-            }
+
+            _customBindingCounter++;
+            return (soapPrefix: "soap12",
+                    soapNs: SoapNamespaces.Soap12,
+                    portName:
+                    $"CustomBinding_{serviceTypeName}{(_customBindingCounter > 0 ? _customBindingCounter.ToString() : string.Empty)}");
         }
 
         #endregion private

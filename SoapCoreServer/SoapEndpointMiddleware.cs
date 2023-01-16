@@ -99,7 +99,7 @@ namespace SoapCoreServer
         private Endpoint GetEndpoint(HttpContext httpContext)
         {
             var path = httpContext.Request.Path.Value;
-            if (path.Length < _options.BasePath.Length)
+            if (string.IsNullOrWhiteSpace(path) || path.Length < _options.BasePath.Length)
             {
                 return null;
             }

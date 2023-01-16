@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Xml.Serialization;
 using SoapCoreServer.Descriptions;
 
 namespace SoapCoreServer.Meta
@@ -17,12 +19,12 @@ namespace SoapCoreServer.Meta
             Ns = ns;
             WsdlDesc = wsdlDesc ?? throw new ArgumentNullException(nameof(wsdlDesc));
 
-            Elements = new List<ElementDesc>();
+            Elements = new Dictionary<Type, ElementDesc>();
             Enums = new List<Type>();
-            ComplexTypes = new List<ElementDesc>();
+            ComplexTypes = new Dictionary<Type, ElementDesc>();
         }
 
-        public IList<ElementDesc> Elements { get; }
+        public IDictionary<Type, ElementDesc> Elements { get; }
 
         public WsdlDesc WsdlDesc { get; }
 
@@ -30,16 +32,20 @@ namespace SoapCoreServer.Meta
 
         public IList<Type> Enums { get; }
 
-        public IList<ElementDesc> ComplexTypes { get; }
+        public IDictionary<Type, ElementDesc> ComplexTypes { get; }
 
-        public string[] ImportNs => ComplexTypes.SelectMany(x => x.Children)
+        public bool HasStream => Elements.ContainsKey(Utils.StreamType);
+
+        public string[] ImportNs => ComplexTypes.Values
+                                                .SelectMany(x => x.Children)
                                                 .Where(x => x.Ns != Ns && x.Ns != DataContractNs)
                                                 .Select(x => x.Ns)
                                                 .Distinct()
                                                 .ToArray();
 
         public bool HasSerializationTypes => ComplexTypes.Any(
-            x => x.Children
+            x => x.Value
+                  .Children
                   .Any(y => y.Type == typeof(Guid) || y.Type == typeof(Guid?)));
 
         public void AddMethod(OperationDataDescription operation)
@@ -94,7 +100,7 @@ namespace SoapCoreServer.Meta
         private bool ContainsElement(Type type, string ns = null)
         {
             ns ??= Utils.GetNsByType(type, WsdlDesc.SoapSerializer);
-            return WsdlDesc.GetSchema(ns).Elements.Any(x => x.Type == type);
+            return WsdlDesc.GetSchema(ns).Elements.ContainsKey(type);
         }
 
         private void AddEnum(Type type, string ns = null)
@@ -111,9 +117,10 @@ namespace SoapCoreServer.Meta
         {
             var ns = elem.Ns ?? Utils.GetNsByType(elem.Type, WsdlDesc.SoapSerializer);
             var schema = WsdlDesc.GetSchema(ns);
-            if (schema.ComplexTypes.All(x => x.Type != elem.Type))
+
+            if (!schema.ComplexTypes.ContainsKey(elem.Type))
             {
-                schema.ComplexTypes.Add(elem);
+                schema.ComplexTypes.Add(elem.Type, elem);
             }
         }
 
@@ -121,18 +128,22 @@ namespace SoapCoreServer.Meta
         {
             var ns = elem.Ns ?? Utils.GetNsByType(elem.Type, WsdlDesc.SoapSerializer);
             var schema = WsdlDesc.GetSchema(ns);
-            if (!schema.Elements.Any(x => x.Type == elem.Type && x.Name == elem.Name))
+
+            if (!schema.Elements.TryGetValue(elem.Type, out var element) ||
+                !element.Name.Equals(elem.Name, StringComparison.Ordinal))
             {
-                schema.Elements.Add(elem);
+                schema.Elements.Add(elem.Type, elem);
             }
+
             return elem;
         }
 
+        //  [DebuggerHidden]
         private void ScanElement(ElementDesc elem)
         {
-            if (ContainsElement(elem.Type)) return;
+            if (ContainsElement(elem.Type, elem.Ns)) return;
 
-            if (elem.Type.IsValueType || elem.Type == typeof(string))
+            if (elem.Type.IsValueType || elem.Type == Utils.StringType)
             {
                 if (elem.Type.IsEnum)
                 {
@@ -143,7 +154,7 @@ namespace SoapCoreServer.Meta
             else
             {
                 var (type, isArray) = Utils.GetFilteredPropertyType(elem.Type);
-                if (isArray)
+                if (isArray && !elem.IsChoice)
                 {
                     if (type == typeof(byte)) return;
 
@@ -156,16 +167,17 @@ namespace SoapCoreServer.Meta
                     }
 
                     var name = Utils.GetTypeName(type, WsdlDesc.SoapSerializer);
+
                     var itemElement = ElementDesc.Create(this,
                                                          name,
-                                                         Utils.GetNsByType(type, WsdlDesc.SoapSerializer),
+                                                         Utils.GetNsByType(type, WsdlDesc.SoapSerializer, elem.Ns),
                                                          type,
                                                          ArrayType.None,
                                                          name);
 
-                    arrayElement.SetChildren(itemElement);
+                    arrayElement.SetChildren(new[] { itemElement });
 
-                    if (!ContainsElement(type))
+                    if (!ContainsElement(type, elem.Ns))
                     {
                         if (IsComplexType(type))
                         {
@@ -175,7 +187,7 @@ namespace SoapCoreServer.Meta
                                                              itemElement.Type,
                                                              itemElement.ArrayType,
                                                              itemElement.TypeName);
-                            //AddComplexType(element);
+
                             ScanElement(element);
                         }
 
@@ -188,13 +200,8 @@ namespace SoapCoreServer.Meta
                     return;
                 }
 
-                if (IsComplexType(type))
+                if (IsComplexType(type) && !elem.IsChoice)
                 {
-                    if (elem.Name != elem.TypeName)
-                    {
-                        elem = ElementDesc.Create(this, elem.TypeName, elem.Ns, type, elem.ArrayType, elem.TypeName);
-                    }
-
                     AddElement(elem.Clone());
                     AddComplexType(elem);
                 }
@@ -206,46 +213,76 @@ namespace SoapCoreServer.Meta
                 {
                     var baseElement = ElementDesc.Create(this,
                                                          Utils.GetTypeName(baseType, WsdlDesc.SoapSerializer),
-                                                         Utils.GetNsByType(baseType, WsdlDesc.SoapSerializer),
+                                                         Utils.GetNsByType(baseType, WsdlDesc.SoapSerializer, elem.Ns),
                                                          baseType,
                                                          ArrayType.None);
+
                     ScanElement(baseElement);
                 }
 
-                var properties = elem.Type
-                                     .GetFieldsAndProperties()
-                                     // filter inherited fields and properties
-                                     .Where(x => x.DeclaringType == elem.Type)
-                                     .Select(x => new
-                                     {
-                                         Info = Utils.GetMemberInfo(x, WsdlDesc.SoapSerializer),
-                                         Name = x.Name,
-                                         Type = x.GetMemberType()
-                                     })
-                                     .Where(x => x.Info != null)
-                                     .OrderBy(x => x.Info.Order)
-                                     .ThenBy(x => x.Name)
-                                     .Select(x =>
-                                     {
-                                         return ElementDesc.Create(this,
-                                                                   x.Info.Name,
-                                                                   Utils.GetNsByType(x.Type, WsdlDesc.SoapSerializer),
-                                                                   x.Type,
-                                                                   x.Info.ArrayType,
-                                                                   required: x.Info.Required,
-                                                                   nullable: x.Info.Nullable,
-                                                                   emitDefaultValue: x.Info.EmitDefaultValue);
-                                     })
-                                     .ToArray();
+                if (!elem.IsChoice)
+                {
+                    var allProperties = elem.Type.GetFieldsAndProperties();
+                    var shouldSerialize = elem.Type.GetShouldSerializeMethods();
 
-                elem.SetChildren(properties);
-                Array.ForEach(properties, ScanElement);
+                    var properties = allProperties
+                                    // filter inherited fields and properties
+                                    .Where(x => x.DeclaringType == elem.Type)
+                                    // filter marked by XmlIgnore
+                                    .Where(x => x.GetCustomAttribute<XmlIgnoreAttribute>() == null)
+                                    .Select((x, i) => new
+                                    {
+                                        Info = Utils.GetMemberInfo(x, WsdlDesc.SoapSerializer),
+                                        Name = x.Name,
+                                        Type = x.GetMemberType(),
+                                        Order = i,
+                                        HasSpecified = allProperties.Any(p => p.Name.Equals($"{x.Name}Specified") &&
+                                                                              p.GetCustomAttribute<XmlIgnoreAttribute>() != null)
+                                    })
+                                    .OrderBy(x => x.Info.Order <= 0 ? x.Order : x.Info.Order)
+                                    .ThenBy(x => x.Name)
+                                    .Select(x =>
+                                    {
+                                        var element = ElementDesc.Create(this,
+                                                                         x.Info.Name,
+                                                                         Utils.GetNsByType(x.Type, WsdlDesc.SoapSerializer, elem.Ns),
+                                                                         x.Type,
+                                                                         x.Info.ArrayType,
+                                                                         required: !shouldSerialize.Contains($"ShouldSerialize{x.Name}") &&
+                                                                           !x.HasSpecified &&
+                                                                           (x.Info.Required || x.Type.IsValueType) &&
+                                                                           !x.Info.Nullable,
+                                                                         nullable: x.Info.Nullable,
+                                                                         emitDefaultValue: x.Info.EmitDefaultValue,
+                                                                         dataType: x.Info.DataType);
+
+                                        if (x.Info.IsChoice)
+                                        {
+                                            element.SetIsChoice()
+                                                   .SetChildren(
+                                                        x.Info.Items.Select(
+                                                              y =>
+                                                              {
+                                                                  var ns = y.Ns ?? Utils.GetNsByType(y.Type, WsdlDesc.SoapSerializer, element.Ns);
+                                                                  return ElementDesc.Create(this, y.Name, ns, y.Type, x.Info.ArrayType, dataType: y.DataType);
+                                                              })
+                                                         .ToArray());
+                                        }
+
+                                        return element;
+                                    })
+                                    .ToArray();
+
+                    elem.SetChildren(properties);
+                }
+
+                Array.ForEach(elem.Children, ScanElement);
             }
         }
 
         private static bool IsComplexType(Type type)
         {
-            return !(type.IsValueType || type == typeof(string));
+            return !(type.IsValueType || type == Utils.StringType);
         }
 
         #endregion private

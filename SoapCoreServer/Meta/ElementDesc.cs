@@ -24,10 +24,10 @@ namespace SoapCoreServer.Meta
                 Type = Utils.GetUnderlyingType(type),
                 Ns = ns,
                 Root = true,
-                IsStreamed = members.Any(x => x.Type == typeof(Stream))
+                IsStreamed = members.Any(x => x.Type == Utils.StreamType)
             };
 
-            var children = members.Select(x => Create(schema, x)).ToArray();
+            var children = members.Select(x => Create(schema, x, ns)).ToArray();
 
             elem.SetChildren(children);
 
@@ -42,7 +42,8 @@ namespace SoapCoreServer.Meta
                                          string typeName = null,
                                          bool required = false,
                                          bool nullable = false,
-                                         bool emitDefaultValue = true)
+                                         bool emitDefaultValue = true,
+                                         string dataType = null)
         {
             var filteredType = Utils.GetFilteredPropertyType(type);
             return new ElementDesc
@@ -51,14 +52,15 @@ namespace SoapCoreServer.Meta
                 Name = name,
                 Ns = ns,
                 Type = Utils.GetUnderlyingType(type),
-                Children = new ElementDesc[] { },
+                Children = Array.Empty<ElementDesc>(),
                 TypeName = typeName ?? GetTypeName(filteredType,
                                                    schema.WsdlDesc.SoapSerializer,
                                                    arrayType),
                 Required = required,
                 Nullable = nullable,
                 EmitDefaultValue = emitDefaultValue,
-                ArrayType = arrayType
+                ArrayType = arrayType,
+                DataType = string.IsNullOrWhiteSpace(dataType) ? null : dataType
             };
         }
 
@@ -70,11 +72,11 @@ namespace SoapCoreServer.Meta
                 Name = name,
                 Ns = ns,
                 Root = true,
-                Children = new ElementDesc[] { }
+                Children = Array.Empty<ElementDesc>()
             };
         }
 
-        public void SetChildren(params ElementDesc[] children)
+        public void SetChildren(ElementDesc[] children)
         {
             Children = children;
             Array.ForEach(children, x => x.Parent = this);
@@ -83,6 +85,13 @@ namespace SoapCoreServer.Meta
         public ElementDesc Clone()
         {
             return Create(Schema, Name, Ns, Type, ArrayType, TypeName, Required, Nullable, EmitDefaultValue);
+        }
+
+        public ElementDesc SetIsChoice()
+        {
+            IsChoice = true;
+
+            return this;
         }
 
         public SchemaDesc Schema { get; private set; }
@@ -95,6 +104,8 @@ namespace SoapCoreServer.Meta
 
         public string TypeName { get; private set; }
 
+        public string DataType { get; private set; }
+
         public bool Root { get; private set; }
 
         public bool Required { get; private set; }
@@ -105,6 +116,8 @@ namespace SoapCoreServer.Meta
 
         public bool IsStreamed { get; private set; }
 
+        public bool IsChoice { get; private set; }
+
         public ElementDesc[] Children { get; private set; }
 
         public ElementDesc Parent { get; private set; }
@@ -113,10 +126,10 @@ namespace SoapCoreServer.Meta
 
         public ArrayType ArrayType { get; private set; } = ArrayType.None;
 
-        private static ElementDesc Create(SchemaDesc schema, OperationMemberDescription member)
+        private static ElementDesc Create(SchemaDesc schema, OperationMemberDescription member, string parentNs)
         {
             var filteredType = Utils.GetFilteredPropertyType(member.Type);
-            var ns = member.Ns ?? Utils.GetNsByType(member.Type, schema.WsdlDesc.SoapSerializer);
+            var ns = member.Ns ?? parentNs ?? Utils.GetNsByType(member.Type, schema.WsdlDesc.SoapSerializer);
 
             return new ElementDesc
             {
@@ -124,7 +137,7 @@ namespace SoapCoreServer.Meta
                 Name = member.Name,
                 Type = Utils.GetUnderlyingType(member.Type),
                 Ns = ns,
-                Children = new ElementDesc[] { },
+                Children = Array.Empty<ElementDesc>(),
                 TypeName = GetTypeName(filteredType,
                                        schema.WsdlDesc.SoapSerializer,
                                        member.ArrayType),
@@ -138,7 +151,7 @@ namespace SoapCoreServer.Meta
                                           SoapSerializerType soapSerializer,
                                           ArrayType arrayType)
         {
-            if (typeInfo.type == typeof(Stream)) return "StreamBody";
+            if (typeInfo.type == Utils.StreamType) return "StreamBody";
 
             var name = Utils.GetTypeName(typeInfo.type, soapSerializer);
 

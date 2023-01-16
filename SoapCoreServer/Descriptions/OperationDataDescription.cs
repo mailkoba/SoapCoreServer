@@ -22,6 +22,7 @@ namespace SoapCoreServer.Descriptions
             {
                 desc.MessageName ??= parameter.ParameterType.Name;
             }
+
             return desc;
         }
 
@@ -45,8 +46,8 @@ namespace SoapCoreServer.Descriptions
             return new OperationDataDescription
             {
                 MessageName = $"{contractName}_{methodName}_InputMessage",
-                Body = new OperationMemberDescription[] { },
-                Headers = new OperationMemberDescription[] { },
+                Body = Array.Empty<OperationMemberDescription>(),
+                Headers = Array.Empty<OperationMemberDescription>(),
                 Operation = operation
             };
         }
@@ -57,8 +58,8 @@ namespace SoapCoreServer.Descriptions
             return new OperationDataDescription
             {
                 MessageName = $"{methodName}Response",
-                Body = new OperationMemberDescription[] { },
-                Headers = new OperationMemberDescription[] { },
+                Body = Array.Empty<OperationMemberDescription>(),
+                Headers = Array.Empty<OperationMemberDescription>(),
                 Operation = operation
             };
         }
@@ -88,7 +89,7 @@ namespace SoapCoreServer.Descriptions
         private static OperationDataDescription CreateByAttribute(Type type,
                                                                   OperationDescription operation)
         {
-            if (!(type.GetCustomAttribute(typeof(MessageContractAttribute)) is MessageContractAttribute attr))
+            if (type.GetCustomAttribute(typeof(MessageContractAttribute)) is not MessageContractAttribute attr)
             {
                 return null;
             }

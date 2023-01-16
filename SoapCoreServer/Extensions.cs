@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.ServiceModel;
@@ -29,6 +30,15 @@ namespace SoapCoreServer
                        .Where(x => x.MemberType == MemberTypes.Property ||
                                    x.MemberType == MemberTypes.Field)
                        .ToArray();
+        }
+
+        public static ISet<string> GetShouldSerializeMethods(this Type type)
+        {
+            return new HashSet<string>(
+                type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(x => x.ReturnType == Utils.BoolType &&
+                                x.Name.StartsWith("ShouldSerialize"))
+                    .Select(x => x.Name));
         }
 
         public static void SetValue(this MemberInfo memberInfo, object obj, object value)
@@ -66,7 +76,7 @@ namespace SoapCoreServer
         public static string GetEnvelopeNamespace(this EnvelopeVersion envelopeVersion)
         {
             // ReSharper disable once PossibleNullReferenceException
-            return (string) envelopeVersion
+            return (string)envelopeVersion
                             .GetType()
                             .GetProperty("Namespace",
                                          BindingFlags.NonPublic |
@@ -77,17 +87,17 @@ namespace SoapCoreServer
         public static bool IsValuableTask(this Type type)
         {
             return type.IsConstructedGenericType &&
-                   type.GetGenericTypeDefinition() == typeof (Task<>);
+                   type.GetGenericTypeDefinition() == typeof(Task<>);
         }
 
         public static bool IsTask(this Type type)
         {
-            return type == typeof (Task);
+            return type == typeof(Task);
         }
 
         public static bool IsVoid(this Type type)
         {
-            return type == typeof (void);
+            return type == typeof(void);
         }
 
         public static bool IsStreamed(this MessageType messageType)

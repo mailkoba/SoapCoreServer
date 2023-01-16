@@ -13,14 +13,16 @@ namespace SoapCoreServer
             return Serializers.GetOrAdd(key,
                                         _ =>
                                         {
-                                            return new XmlSerializer(type: type,
+                                            var rootAttr = new XmlRootAttribute(name)
+                                            {
+                                                Namespace = ns
+                                            };
+
+                                            return new XmlSerializer(type,
                                                                      overrides: null,
-                                                                     extraTypes: new[] { typeof (System.Text.Json.JsonElement) },
-                                                                     root: new XmlRootAttribute(name)
-                                                                     {
-                                                                         Namespace = ns
-                                                                     },
-                                                                     defaultNamespace: ns);
+                                                                     extraTypes: new[] { typeof(System.Text.Json.JsonElement) },
+                                                                     rootAttr,
+                                                                     ns);
                                         });
         }
 
