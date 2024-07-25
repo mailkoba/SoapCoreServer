@@ -71,7 +71,7 @@ namespace SoapCoreServer.Filters
             Array.Copy(created, 0, operand, nonce.Length, created.Length);
             Array.Copy(password, 0, operand, nonce.Length + created.Length, password.Length);
 
-#if NETCORE_21 || NETCORE_31
+#if NETCORE_31
             var hashedDataBytes = SHA1.Create().ComputeHash(operand);
 #endif
 

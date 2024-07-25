@@ -15,13 +15,7 @@ namespace SoapCoreServer.Client
 
         public bool DoNotCheckCertificates { get; private set; }
 
-#if NETCORE_21
-        public SslProtocols SslProtocols { get; private set; } =
- SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
-#endif
-#if NETCORE_31 || NET_60_OR_GREATER
         public SslProtocols SslProtocols { get; private set; } = SslProtocols.Tls12 | SslProtocols.Tls13;
-#endif
 
         public SoapSerializerType SerializerType { get; private set; }
 

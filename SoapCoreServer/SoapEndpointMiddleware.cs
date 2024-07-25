@@ -392,22 +392,6 @@ namespace SoapCoreServer
             return responseMessage;
         }
 
-#if NETCORE_21
-        private static Task WriteMessageAsync(IMessageEncoder messageEncoder,
-                                              Message responseMessage,
-                                              HttpContext httpContext)
-        {
-            return messageEncoder.WriteMessage(responseMessage, httpContext.Response.Body);
-        }
-
-        private static Task<Message> ReadMessageAsync(HttpContext httpContext, IMessageEncoder messageEncoder)
-        {
-            return messageEncoder.ReadMessage(httpContext.Request.Body,
-                                              MaxSizeOfHeaders,
-                                              httpContext.Request.ContentType);
-        }
-#endif
-#if NETCORE_31 || NET_60_OR_GREATER
         private static Task WriteMessageAsync(IMessageEncoder messageEncoder,
                                               Message responseMessage,
                                               HttpContext httpContext)
@@ -421,7 +405,6 @@ namespace SoapCoreServer
                                                    MaxSizeOfHeaders,
                                                    httpContext.Request.ContentType);
         }
-#endif
 
         private string GetInfoPage()
         {

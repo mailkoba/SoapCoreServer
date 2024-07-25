@@ -74,12 +74,7 @@ namespace SoapCoreServer.Client
 
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
-#if NETCORE_21
-            using var responseStream = await response.Content.ReadAsStreamAsync();
-#endif
-#if NETCORE_31 || NET_60_OR_GREATER
             await using var responseStream = await response.Content.ReadAsStreamAsync();
-#endif
 
             var responseMessage = await messageEncoder.ReadMessage(responseStream, MaxSizeOfHeaders, messageEncoder.ContentType);
 
