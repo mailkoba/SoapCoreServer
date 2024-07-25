@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using SoapCoreServer.Messages;
 using System.Net;
+using System.ServiceModel;
 
 namespace SoapCoreServer.Client
 {
@@ -89,6 +90,16 @@ namespace SoapCoreServer.Client
             }
 
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new EndpointNotFoundException($"Endpoint on {_options.ServiceUrl} not found!");
+            }
+
+            if (!(response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.InternalServerError))
+            {
+                throw new WebException($"Endpoint on {_options.ServiceUrl} has web exception: {response.StatusCode}!");
+            }
 
             await using var responseStream = await response.Content.ReadAsStreamAsync();
             var responseMessage =
