@@ -7,7 +7,7 @@ Published on NuGet.org - [https://www.nuget.org/packages/SoapCoreServer/](https:
 
 #### Platform
 
-.Net Core 2.1, .Net Core 3.1, .Net 6.0, .Net 7.0, .Net Framework >= 4.7 (via netstandard 2.0).
+.Net Core 3.1, .Net 6.0, .Net 7.0
 
 #### Features
 
