@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Runtime.Serialization;
 using System.Xml.Serialization;
 
 namespace SoapCoreServer
@@ -26,6 +27,23 @@ namespace SoapCoreServer
                                         });
         }
 
+        public static DataContractSerializer GetDataContractSerializer(Type type, string name, string ns)
+        {
+            var key = $"{type.FullName}__dc__{name}__{ns}";
+
+            return DataContractSerializers.GetOrAdd(key,
+                                                    _ =>
+                                                    {
+                                                        return new DataContractSerializer(
+                                                            type,
+                                                            name,
+                                                            ns,
+                                                            knownTypes: new[]
+                                                                { typeof (System.Text.Json.JsonElement) });
+                                                    });
+        }
+
         private static readonly ConcurrentDictionary<string, XmlSerializer> Serializers = new();
+        private static readonly ConcurrentDictionary<string, DataContractSerializer> DataContractSerializers = new();
     }
 }

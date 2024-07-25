@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.Serialization;
 using System.ServiceModel.Channels;
 using System.Xml;
 
@@ -29,7 +28,7 @@ namespace SoapCoreServer.Client
             {
                 var value = prop.GetValue(_data);
 
-                var serializer = new DataContractSerializer(prop.GetMemberType(), prop.Name, Namespace);
+                var serializer = XmlSerializersCache.GetDataContractSerializer(prop.GetMemberType(), prop.Name, Namespace);
                 serializer.WriteObject(writer, value);
             }
         }

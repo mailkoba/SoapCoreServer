@@ -69,14 +69,10 @@ namespace SoapCoreServer.BodyWriters
             switch (soapSerializer)
             {
                 case SoapSerializerType.DataContractSerializer:
-                    var dataContractSerializer = new DataContractSerializer(
+                    var dataContractSerializer = XmlSerializersCache.GetDataContractSerializer(
                         prop.GetMemberType(),
                         name,
-                        _operation.WrapperNamespace ?? _operation.Operation.ContractDescription.Namespace,
-                        new[]
-                        {
-                            typeof (System.Text.Json.JsonElement)
-                        });
+                        _operation.WrapperNamespace ?? _operation.Operation.ContractDescription.Namespace);
 
                     dataContractSerializer.WriteObject(xmlWriter, value);
                     break;

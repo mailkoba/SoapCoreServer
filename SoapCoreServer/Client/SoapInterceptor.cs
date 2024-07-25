@@ -11,6 +11,7 @@ using System.ServiceModel.Channels;
 using System.Text;
 using System.Threading.Tasks;
 using SoapCoreServer.Messages;
+using System.Net;
 
 namespace SoapCoreServer.Client
 {
@@ -48,7 +49,11 @@ namespace SoapCoreServer.Client
             {
                 CheckCertificateRevocationList = !_options.DoNotCheckCertificates,
                 SslProtocols = _options.SslProtocols,
-                UseDefaultCredentials = true
+                UseDefaultCredentials = true,
+                AllowAutoRedirect = true,
+                PreAuthenticate = true,
+                UseCookies = true,
+                AutomaticDecompression = DecompressionMethods.All
             };
 
             if (_options.DoNotCheckCertificates)
@@ -59,12 +64,23 @@ namespace SoapCoreServer.Client
             var isStream = invocation.Arguments.Length == 1 &&
                            invocation.Arguments.FirstOrDefault() is Stream;
 
-            using var client = new HttpClient(clientHandler);
+            using var client = new HttpClient(_options.CustomHandler == null
+                                                  ? clientHandler
+                                                  : _options.CustomHandler(clientHandler));
+
+            client.Timeout = TimeSpan.FromSeconds(_options.TimeoutInSec);
 
             using var content = await CreateContent(invocation, operation, messageEncoder, isStream);
-            using var request = new HttpRequestMessage(HttpMethod.Post, _options.ServiceUrl)
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, _options.ServiceUrl);
+            request.Content = content;
+
+            client.DefaultRequestHeaders.ConnectionClose = false;
+            client.DefaultRequestHeaders.ExpectContinue = true;
+            client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
             {
-                Content = content
+                NoCache = true,
+                MaxAge = TimeSpan.Zero
             };
 
             if (isStream)
@@ -75,8 +91,8 @@ namespace SoapCoreServer.Client
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
             await using var responseStream = await response.Content.ReadAsStreamAsync();
-
-            var responseMessage = await messageEncoder.ReadMessage(responseStream, MaxSizeOfHeaders, messageEncoder.ContentType);
+            var responseMessage =
+                await messageEncoder.ReadMessage(responseStream, MaxSizeOfHeaders, messageEncoder.ContentType);
 
             ResponseHelper.FillResponse(invocation, responseMessage, operation);
         }
@@ -107,10 +123,13 @@ namespace SoapCoreServer.Client
                 content = new StreamContent(ms);
 
                 content.Headers.ContentLength = ms.Length;
-                content.Headers.Add(SoapAction, message.Headers.Action);
+                content.Headers.Add(SoapAction, $"\"{operation.SoapAction}\"");
             }
 
-            content.Headers.ContentType = new MediaTypeHeaderValue(messageEncoder.ContentType);
+            content.Headers.ContentType = new MediaTypeHeaderValue(messageEncoder.ContentType)
+            {
+                CharSet = "utf-8"
+            };
 
             return content;
         }
@@ -150,6 +169,8 @@ namespace SoapCoreServer.Client
                 if (!isStream)
                 {
                     FillMessageHeaders(message, operation, invocation.Arguments.First());
+
+                    message.Headers.Action = null;
                 }
 
                 return new CustomMessage(message);
@@ -170,7 +191,11 @@ namespace SoapCoreServer.Client
                 var prop = props.FirstOrDefault(x => x.Name == header.Name);
                 if (prop == null) continue;
 
-                message.Headers.Add(new DataHeader(header.Name, header.Ns, prop.GetValue(data)));
+                var value = prop.GetValue(data);
+                if (value != null)
+                {
+                    message.Headers.Add(new DataHeader(header.Name, header.Ns, value));
+                }
             }
         }
     }

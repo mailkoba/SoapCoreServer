@@ -5,7 +5,6 @@ using System.Runtime.Serialization;
 using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.Threading.Tasks;
-using System.Xml.Serialization;
 using System.Xml;
 using Castle.DynamicProxy;
 using SoapCoreServer.Descriptions;
@@ -140,14 +139,12 @@ namespace SoapCoreServer.Client
             switch (soapSerializer)
             {
                 case SoapSerializerType.DataContractSerializer:
-                    var dataContractSerializer = new DataContractSerializer(type, messageName, ns);
+                    var dataContractSerializer = XmlSerializersCache.GetDataContractSerializer(type, messageName, ns);
                     return dataContractSerializer.ReadObject(xmlReader);
                 case SoapSerializerType.XmlSerializer:
-                    var xmlSerializer = new XmlSerializer(type,
-                                                          overrides: null,
-                                                          extraTypes: Array.Empty<Type>(),
-                                                          new XmlRootAttribute(messageName),
-                                                          ns);
+                    var xmlSerializer = XmlSerializersCache.GetSerializer(type,
+                                                                          messageName,
+                                                                          ns);
                     return xmlSerializer.Deserialize(xmlReader);
                 default:
                     throw new Exception($"Unknown SoapSerializerType '{soapSerializer}'!");
