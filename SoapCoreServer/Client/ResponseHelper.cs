@@ -21,7 +21,7 @@ namespace SoapCoreServer.Client
             {
                 var messageFault = MessageFault.CreateFault(responseMessage, 0x10000);
 
-                throw new Exception(messageFault.Reason.ToString());
+                throw new FaultException(messageFault, operation.SoapAction);
             }
 
             if (invocation.Method.ReturnType.IsVoid() || invocation.Method.ReturnType.IsTask())
